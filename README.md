@@ -2,6 +2,7 @@ A minimal plugin that adds a native-feeling "Insert Block" button on hover in Ro
 	[GIF Demo Here]
 
 Features
+
 	**Hover to Show**: A `+` icon appears instantly on mouse-over.
 	
 	**Click to Insert**: Inserts a new block directly below the one you're hovering over.
