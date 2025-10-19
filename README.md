@@ -2,7 +2,9 @@ A minimal plugin that adds a native-feeling "Insert Block" button on hover in Ro
 
 [GIF Demo Here]
 
+
 01 Features
+
 
 **Hover to Show**: A `+` icon appears instantly on mouse-over.
 	
@@ -11,6 +13,7 @@ A minimal plugin that adds a native-feeling "Insert Block" button on hover in Ro
 **Smart Clean**: The button auto-hides when you type or move your mouse away.
 	
 **Perfect Alignment**: Dynamically centers the icon vertically at any font size.
+
 
 02 Acknowledgements
 
