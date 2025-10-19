@@ -96,22 +96,42 @@
     const buttonContainer = document.createElement("div");
     buttonContainer.id = BUTTON_CONTAINER_ID;
 
+    // [!!] 修改点：重写了整个 handleInsertClick 的数据查询逻辑
     const handleInsertClick = async (e) => {
       e.stopPropagation();
       removeButton();
-      const queryResult =
-        window.roamAlphaAPI
-          .q(
-            `[:find (pull ?e [*]) (pull ?p [*]) :where [?e :block/uid "${blockUid}"] [?e :block/parents ?p]]`
-          )
-          .pop() || [];
-      const [block, parentBlock] = queryResult;
-      if (!block || !parentBlock) return;
+
+      // 使用 data.pull 和反向查找 :block/_children 来精确定位 *直接* 父级
+      // 1. "[:block/order ...]" - 获取当前 block 的 order
+      // 2. "{:block/_children [:block/uid]}" - 获取拥有此 block 作为 child 的父级，并只要父级的 uid
+      const blockData = window.roamAlphaAPI.data.pull(
+        "[:block/order {:block/_children [:block/uid]}]",
+        [":block/uid", blockUid]
+      );
+
+      // 健壮性检查
+      if (!blockData || !blockData[":block/_children"] || blockData[":block/_children"].length === 0) {
+        console.error("Native Insert Block: Could not find parent for block:", blockUid);
+        return;
+      }
+      
+      const blockOrder = blockData[":block/order"];
+      // [0] 确保我们拿到的是唯一的直接父级
+      const parentUid = blockData[":block/_children"][0][":block/uid"]; 
+
+      if (!parentUid) {
+           console.error("Native Insert Block: Parent has no UID:", blockData[":block/_children"][0]);
+           return;
+      }
+
       const newUid = window.roamAlphaAPI.util.generateUID();
+      
+      // 现在 parent-uid 和 order 都是绝对正确的
       await window.roamAlphaAPI.createBlock({
-        location: { "parent-uid": parentBlock.uid, order: block.order + 1 },
+        location: { "parent-uid": parentUid, order: blockOrder + 1 },
         block: { string: "", uid: newUid },
       });
+
       setTimeout(() => {
         const focusedWindowId =
           window.roamAlphaAPI.ui.getFocusedBlock()?.["window-id"];
@@ -122,6 +142,7 @@
         }
       }, 100);
     };
+    // [!!] 修改结束
 
     const buttonElement = window.React.createElement(window.Blueprint.Core.Icon, {
       icon: "plus",
