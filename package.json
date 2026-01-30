@@ -1,0 +1,23 @@
+{
+  "name": "native-insert-block",
+  "version": "1.0.0",
+  "description": "A Roam Research plugin for quick block insertion with keyboard modifiers",
+  "main": "extension.js",
+  "scripts": {
+    "build": "node build.js",
+    "build:watch": "node build.js --watch"
+  },
+  "keywords": [
+    "roam",
+    "roam-research",
+    "plugin",
+    "block",
+    "insert"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/native-insert-block"
+  }
+}
