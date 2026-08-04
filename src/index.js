@@ -18,6 +18,7 @@ let activeBlockContainer = null;
 let activeBlockInputId = null;
 let activeHighlightObserver = null;
 let scrollTimer = null;
+let pluginLoadTimer = null;
 
 const addStyles = () => {
   if (document.getElementById(STYLE_ID)) return;
@@ -548,10 +549,15 @@ const mainApp = {
       clearTimeout(scrollTimer);
       scrollTimer = null;
     }
+    if (pluginLoadTimer) {
+      clearTimeout(pluginLoadTimer);
+      pluginLoadTimer = null;
+    }
   },
 };
 
 const loadPlugin = () => {
+  pluginLoadTimer = null;
   if (
     window.roamAlphaAPI &&
     window.React &&
@@ -560,7 +566,7 @@ const loadPlugin = () => {
   ) {
     mainApp.init();
   } else {
-    setTimeout(loadPlugin, PLUGIN_LOAD_RETRY_MS);
+    pluginLoadTimer = setTimeout(loadPlugin, PLUGIN_LOAD_RETRY_MS);
   }
 };
 
@@ -568,13 +574,16 @@ const unloadExisting = () => {
   // 先卸载已经存在的 Native Insert Block 实例
   if (window.nativeInsertBlockPlugin) {
     window.nativeInsertBlockPlugin.destroy();
+    delete window.nativeInsertBlockPlugin;
   }
   // 兼容旧名字 quickInsert*
   if (window.quickInsertPlugin) {
     window.quickInsertPlugin.destroy();
+    delete window.quickInsertPlugin;
   }
   if (window.quickInsertBlockV15) {
     window.quickInsertBlockV15.destroy();
+    delete window.quickInsertBlockV15;
   }
 };
 

@@ -20,25 +20,32 @@ function buildES6Module() {
   }
 
   const coreCode = match[1].trim();
+  const directExecutionPattern = /\n\s*unloadExisting\(\);\s*\n\s*loadPlugin\(\);\s*\n\s*window\.nativeInsertBlockPlugin = mainApp;\s*$/;
+
+  if (!directExecutionPattern.test(coreCode)) {
+    throw new Error('Could not find the direct roam/js startup block');
+  }
+
+  // The IIFE source starts itself when pasted into {{[[roam/js]]}}. The
+  // Marketplace module must only start through its lifecycle hook.
+  const moduleCode = coreCode.replace(directExecutionPattern, '').trimEnd();
 
   // Add export default block
   const exportBlock = `
 
 export default {
-  onload: ({ extensionAPI }) => {
-    // 加载插件
+  onload: () => {
     unloadExisting();
     loadPlugin();
     window.nativeInsertBlockPlugin = mainApp;
   },
   onunload: () => {
-    // 卸载插件
     unloadExisting();
   },
-}
+};
 `;
 
-  const es6Code = coreCode + exportBlock;
+  const es6Code = moduleCode + exportBlock;
 
   // Write output file
   fs.writeFileSync(OUTPUT_FILE, es6Code, 'utf-8');
