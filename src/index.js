@@ -2,8 +2,8 @@
 const BUTTON_CONTAINER_ID = "native-insert-block-btn-container";
 const STYLE_ID = "native-insert-block-styles";
 const BLOCK_INPUT_SELECTOR = "[id^='block-input']";
-const NO_CHILDREN_CLASS = "lxh-ext-native-insert-block-no-children";
-const VISIBLE_CLASS = "lxh-ext-native-insert-block-visible";
+const NO_CHILDREN_CLASS = "native-insert-block-no-children";
+const VISIBLE_CLASS = "native-insert-block-visible";
 const ROAM_HIGHLIGHT_CLASS = "rm-block-highlight";
 const DEFAULT_BUTTON_SIZE = 24;
 const WINDOW_ID_PATTERN = /^block-input-(.+)-([a-zA-Z0-9_-]{9})$/;
@@ -24,7 +24,7 @@ const addStyles = () => {
   const css = `.roam-block-container { position: relative; }
       #${BUTTON_CONTAINER_ID} { display: none; justify-content: center; align-items: center; position: absolute; top: 18px; left: 0; height: ${DEFAULT_BUTTON_SIZE}px; width: ${DEFAULT_BUTTON_SIZE}px; z-index: 99; pointer-events: auto; }
       #${BUTTON_CONTAINER_ID}.${VISIBLE_CLASS} { display: flex; }
-      #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: calc(1em - ${DEFAULT_BUTTON_SIZE / 2}px); }
+      #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: 2px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon { cursor: pointer; color: #A7B6C2; background: none; border-radius: 0; box-shadow: none; transition: color 0.1s ease-in-out; padding: 2px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon:hover { color: #5C7080; }`;
   const styleElement = document.createElement("style");
