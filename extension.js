@@ -3,7 +3,10 @@ const STYLE_ID = "native-insert-block-styles";
 const BLOCK_INPUT_SELECTOR = "[id^='block-input']";
 const NO_CHILDREN_CLASS = "native-insert-block-no-children";
 const VISIBLE_CLASS = "native-insert-block-visible";
+const DOCUMENT_MODE_CLASS = "native-insert-block-document-mode";
 const ROAM_HIGHLIGHT_CLASS = "rm-block-highlight";
+const DOCUMENT_MODE_SELECTOR =
+  ".rm-block--document, .rm-block__children--document";
 const DEFAULT_BUTTON_SIZE = 24;
 const WINDOW_ID_PATTERN = /^block-input-(.+)-([a-zA-Z0-9_-]{9})$/;
 
@@ -25,6 +28,7 @@ const addStyles = () => {
       #${BUTTON_CONTAINER_ID} { display: none; justify-content: center; align-items: center; position: absolute; top: 18px; left: 0; height: ${DEFAULT_BUTTON_SIZE}px; width: ${DEFAULT_BUTTON_SIZE}px; z-index: 99; pointer-events: auto; }
       #${BUTTON_CONTAINER_ID}.${VISIBLE_CLASS} { display: flex; }
       #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: 2px; }
+      #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 2px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon { cursor: pointer; color: #A7B6C2; background: none; border-radius: 0; box-shadow: none; transition: color 0.1s ease-in-out; padding: 2px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon:hover { color: #5C7080; }`;
   const styleElement = document.createElement("style");
@@ -47,6 +51,9 @@ const determineChildrenState = (container) => {
 
   return Boolean(hasRenderedChildren || isCollapsedWithChildren);
 };
+
+const isDocumentMode = (container) =>
+  Boolean(container?.closest?.(DOCUMENT_MODE_SELECTOR));
 
 const getVersionState = (container) => {
   const versionChoice = container.querySelector(".rm-version-choice-wrapper");
@@ -94,11 +101,14 @@ const updateButtonState = (container) => {
   if (!button) return;
   const versionState = getVersionState(container);
   const hasChildren = determineChildrenState(container);
+  const documentMode = isDocumentMode(container);
   const shouldOffset =
-    versionState.isVersionBlock && versionState.isCollapsed;
+    !documentMode && versionState.isVersionBlock && versionState.isCollapsed;
   const treatAsChildren =
-    hasChildren ||
-    (versionState.isVersionBlock && versionState.isCollapsed);
+    !documentMode &&
+    (hasChildren ||
+      (versionState.isVersionBlock && versionState.isCollapsed));
+  button.classList.toggle(DOCUMENT_MODE_CLASS, documentMode);
   button.classList.toggle(NO_CHILDREN_CLASS, !treatAsChildren);
   adjustButtonPosition(container, button, versionState, shouldOffset);
 };
@@ -448,8 +458,9 @@ const renderButton = (container) => {
   buttonContainer.classList.add(VISIBLE_CLASS);
   buttonContainer.style.visibility = "hidden";
   const versionState = getVersionState(container);
+  const documentMode = isDocumentMode(container);
   const shouldOffset =
-    versionState.isVersionBlock && versionState.isCollapsed;
+    !documentMode && versionState.isVersionBlock && versionState.isCollapsed;
   adjustButtonPosition(
     container,
     buttonContainer,

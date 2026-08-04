@@ -9,6 +9,7 @@ Click the button to:
 * **Option + Click** – insert a new block *above*
 * **Ctrl + Click** – insert a new *parent* block above
 * **Shift + Click** – delete the current block
+* **Document Mode** – keep the insert button aligned with the active text row, including blocks with children
 
 ## Installation
 
