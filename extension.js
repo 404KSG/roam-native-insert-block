@@ -5,7 +5,6 @@ const BLOCK_INPUT_SELECTOR = "[id^='block-input']";
 const NO_CHILDREN_CLASS = "native-insert-block-no-children";
 const VISIBLE_CLASS = "native-insert-block-visible";
 const DOCUMENT_MODE_CLASS = "native-insert-block-document-mode";
-const HIDDEN_BULLET_CLASS = "native-insert-block-bullet-hidden";
 const ROAM_HIGHLIGHT_CLASS = "rm-block-highlight";
 const TOOLTIP_OPEN_DELAY_MS = 400;
 const ACTIONS = Object.freeze({
@@ -24,7 +23,7 @@ const ACTION_DETAILS = Object.freeze([
 ]);
 const DOCUMENT_MODE_SELECTOR =
   ".rm-block--document, .rm-block__children--document";
-const DEFAULT_BUTTON_SIZE = 18;
+const DEFAULT_BUTTON_SIZE = 24;
 const WINDOW_ID_PATTERN = /^block-input-(.+)-([a-zA-Z0-9_-]{9})$/;
 
 const MAX_FOCUS_ATTEMPTS = 20;
@@ -40,7 +39,6 @@ let scrollTimer = null;
 let pluginLoadTimer = null;
 let activeActionMenu = null;
 let activeTriggerRenderer = null;
-let activeBulletElement = null;
 const focusTimers = new Set();
 
 const isMacPlatform = () => {
@@ -107,10 +105,9 @@ const addStyles = () => {
       #${BUTTON_CONTAINER_ID}.${VISIBLE_CLASS} { display: flex; }
       #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: 2px; }
       #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 2px; }
-      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger.bp3-button { min-width: 16px; min-height: 16px; padding: 0; color: #A7B6C2; border-radius: 2px; box-shadow: none; }
-      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger.bp3-button:hover { color: #5C7080; background: transparent; }
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger.bp3-button { min-width: 20px; min-height: 20px; padding: 2px; color: #A7B6C2; border-radius: 2px; box-shadow: none; }
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger.bp3-button:hover { color: #5C7080; background: rgba(167, 182, 194, 0.15); }
       #${BUTTON_CONTAINER_ID} .native-insert-block-trigger .bp3-icon { color: inherit; }
-      .rm-bullet.${HIDDEN_BULLET_CLASS} { visibility: hidden; }
       #${ACTION_MENU_ID} { position: fixed; z-index: 10000; min-width: 168px; padding: 4px; }
       #${ACTION_MENU_ID} .bp3-menu-item { width: 100%; border: 0; text-align: left; cursor: pointer; }
       #${ACTION_MENU_ID} .native-insert-block-menu-delete { margin-top: 4px; padding-top: 9px; border-top: 1px solid rgba(167, 182, 194, 0.35); color: #C23030; }`;
@@ -124,30 +121,11 @@ const removeStyles = () => {
   document.getElementById(STYLE_ID)?.remove();
 };
 
-const getOwnBlockElements = (container) => {
-  const blockInput = container?.querySelector?.(BLOCK_INPUT_SELECTOR) || null;
-  const blockMain = blockInput?.closest?.(".rm-block-main") || null;
-  const controls =
-    blockMain?.querySelector?.(".rm-block__controls") ||
-    container?.querySelector?.(".rm-block__controls") ||
-    null;
-  const bulletFromCurrentRow =
-    controls?.querySelector?.(".rm-bullet") ||
-    blockMain?.querySelector?.(".rm-bullet") ||
-    null;
-  const bullet =
-    bulletFromCurrentRow ||
-    (!controls && !blockMain
-      ? container?.querySelector?.(".rm-bullet") || null
-      : null);
-  return { blockInput, blockMain, bullet, controls };
-};
-
 const determineChildrenState = (container) => {
   const childrenContainer = container.querySelector(".rm-block-children");
   const hasRenderedChildren =
     childrenContainer && container.querySelector(".roam-block-container");
-  const { bullet } = getOwnBlockElements(container);
+  const bullet = container.querySelector(".rm-bullet");
   const isCollapsedWithChildren =
     bullet && bullet.classList.contains("rm-bullet--closed");
 
@@ -204,12 +182,6 @@ const updateButtonState = (container) => {
   const versionState = getVersionState(container);
   const hasChildren = determineChildrenState(container);
   const documentMode = isDocumentMode(container);
-  const { bullet } = getOwnBlockElements(container);
-  if (activeBulletElement !== bullet) {
-    activeBulletElement?.classList?.toggle(HIDDEN_BULLET_CLASS, false);
-    activeBulletElement = bullet;
-  }
-  activeBulletElement?.classList?.toggle(HIDDEN_BULLET_CLASS, true);
   const shouldOffset =
     !documentMode && versionState.isVersionBlock && versionState.isCollapsed;
   const treatAsChildren =
@@ -231,9 +203,8 @@ const adjustButtonPosition = (
   if (!container || !button) return;
 
   const applyPosition = () => {
-    const ownBullet = getOwnBlockElements(container).bullet;
     const anchor =
-      ownBullet ||
+      container.querySelector(".rm-bullet") ||
       versionState?.versionBullet ||
       versionState?.caretElement ||
       container.querySelector(BLOCK_INPUT_SELECTOR);
@@ -255,22 +226,6 @@ const adjustButtonPosition = (
         anchorRect.height / 2 -
         measuredButtonRect.height / 2;
       button.style.top = `${Math.max(0, Math.round(centeredTop))}px`;
-      if (
-        anchor === ownBullet &&
-        Number.isFinite(anchorRect.left) &&
-        Number.isFinite(anchorRect.width) &&
-        Number.isFinite(containerRect.left) &&
-        Number.isFinite(measuredButtonRect.width)
-      ) {
-        const centeredLeft =
-          anchorRect.left -
-          containerRect.left +
-          anchorRect.width / 2 -
-          measuredButtonRect.width / 2;
-        button.style.left = `${Math.round(centeredLeft)}px`;
-      } else {
-        button.style.left = "";
-      }
       return;
     }
 
@@ -336,8 +291,6 @@ const removeButton = () => {
   stopHighlightObserver();
   removeActionMenu();
   activeTriggerRenderer = null;
-  activeBulletElement?.classList?.toggle(HIDDEN_BULLET_CLASS, false);
-  activeBulletElement = null;
   const button = document.getElementById(BUTTON_CONTAINER_ID);
   if (button) {
     if (window.ReactDOM?.unmountComponentAtNode) {
@@ -591,7 +544,7 @@ const renderButton = (container) => {
       const children =
         blockData[":block/children"] || blockData["block/children"] || [];
       targetOrder = children.length;
-      const { bullet } = getOwnBlockElements(container);
+      const bullet = container.querySelector(".rm-bullet");
       expandParentAfterInsert = Boolean(
         bullet?.classList?.contains?.("rm-bullet--closed") ||
         container.classList.contains("rm-block--closed")
@@ -720,10 +673,7 @@ const renderButton = (container) => {
       window.React.createElement(window.Blueprint.Core.Button, {
         "aria-label": presentation.label,
         className: "native-insert-block-trigger",
-        icon: window.React.createElement(window.Blueprint.Core.Icon, {
-          icon: presentation.icon,
-          size: 12,
-        }),
+        icon: presentation.icon,
         minimal: true,
         small: true,
         onClick: handleInsertClick,

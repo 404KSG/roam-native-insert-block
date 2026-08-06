@@ -23,12 +23,11 @@ class ClassList {
 }
 
 const createHarness = ({
-  bulletRect = { top: 110, left: 120, width: 6, height: 14 },
+  bulletRect = { top: 110, height: 14 },
   collapsed = false,
-  containerRect = { top: 100, left: 100, width: 500, height: 28 },
+  containerRect = { top: 100, height: 28 },
   deleteBlock,
   moveBlock,
-  nestedBulletRect = null,
   platform = "MacIntel",
   pullBlock,
   unmountAvailable = true,
@@ -82,7 +81,7 @@ const createHarness = ({
       },
       getBoundingClientRect() {
         if (this.id === "native-insert-block-btn-container") {
-          return { top: 0, left: 0, width: 18, height: 18 };
+          return { top: 0, left: 0, width: 24, height: 24 };
         }
         return {
           top: 0,
@@ -232,38 +231,13 @@ const createHarness = ({
     classList: new ClassList(collapsed ? ["rm-bullet--closed"] : []),
     getBoundingClientRect: () => bulletRect,
   };
-  const nestedBullet = nestedBulletRect
-    ? {
-        classList: new ClassList(),
-        getBoundingClientRect: () => nestedBulletRect,
-      }
-    : null;
-  const controls = {
-    querySelector(selector) {
-      if (selector === ".rm-bullet") return bullet;
-      return null;
-    },
-  };
-  const blockMain = {
-    querySelector(selector) {
-      if (selector === ".rm-block__controls") return controls;
-      return null;
-    },
-  };
-  const blockInput = {
-    id: "block-input-main-123456789",
-    closest(selector) {
-      return selector === ".rm-block-main" ? blockMain : null;
-    },
-  };
   const container = {
     classList: new ClassList(),
     querySelector(selector) {
       if (selector.startsWith("[id^='block-input']")) {
-        return blockInput;
+        return { id: "block-input-main-123456789" };
       }
-      if (selector === ".rm-bullet") return nestedBullet || bullet;
-      if (selector === ".rm-block__controls") return controls;
+      if (selector === ".rm-bullet") return bullet;
       return null;
     },
     closest: () => null,
@@ -305,10 +279,7 @@ const createHarness = ({
   return {
     calls,
     buttonExists: () => Boolean(buttonContainer),
-    buttonLeft: () => buttonContainer?.style.left || "",
     buttonTop: () => buttonContainer?.style.top || "",
-    bulletHidden: () =>
-      bullet.classList.contains("native-insert-block-bullet-hidden"),
     errors,
     event,
     fireDocumentEvent: (type, overrides = {}) =>
@@ -344,41 +315,20 @@ test("the trigger is a Blueprint button with a discoverable macOS tooltip", () =
     );
     assert.equal(button.component.name, "Button");
     assert.equal(button.props["aria-label"], "Insert block below");
-    assert.equal(button.props.icon.component.name, "Icon");
-    assert.equal(button.props.icon.props.icon, "plus");
-    assert.equal(button.props.icon.props.size, 12);
     assert.equal(button.props.minimal, true);
   } finally {
     harness.unload();
   }
 });
 
-test("the trigger replaces the rendered bullet at the same X/Y center", () => {
+test("the trigger is centered from the rendered bullet geometry", () => {
   const harness = createHarness({
-    bulletRect: { top: 110, left: 120, width: 6, height: 14 },
-    containerRect: { top: 100, left: 100, width: 500, height: 28 },
+    bulletRect: { top: 110, height: 14 },
+    containerRect: { top: 100, height: 28 },
   });
   try {
     harness.renderForContainer();
-    assert.equal(harness.buttonTop(), "8px");
-    assert.equal(harness.buttonLeft(), "14px");
-    assert.equal(harness.bulletHidden(), true);
-  } finally {
-    harness.unload();
-  }
-  assert.equal(harness.bulletHidden(), false);
-});
-
-test("a block with children anchors to its own bullet, not a nested bullet", () => {
-  const harness = createHarness({
-    bulletRect: { top: 110, left: 120, width: 6, height: 14 },
-    containerRect: { top: 100, left: 100, width: 500, height: 80 },
-    nestedBulletRect: { top: 150, left: 148, width: 6, height: 14 },
-  });
-  try {
-    harness.renderForContainer();
-    assert.equal(harness.buttonTop(), "8px");
-    assert.equal(harness.buttonLeft(), "14px");
+    assert.equal(harness.buttonTop(), "5px");
   } finally {
     harness.unload();
   }
@@ -437,14 +387,14 @@ test("holding a modifier previews its action icon and releasing restores below",
   const harness = createHarness();
   try {
     harness.renderForContainer();
-    assert.equal(harness.trigger().icon.props.icon, "plus");
+    assert.equal(harness.trigger().icon, "plus");
 
     harness.fireDocumentEvent("keydown", { key: "Shift", shiftKey: true });
-    assert.equal(harness.trigger().icon.props.icon, "trash");
+    assert.equal(harness.trigger().icon, "trash");
     assert.equal(harness.trigger()["aria-label"], "Delete block");
 
     harness.fireDocumentEvent("keyup", { key: "Shift" });
-    assert.equal(harness.trigger().icon.props.icon, "plus");
+    assert.equal(harness.trigger().icon, "plus");
     assert.equal(harness.trigger()["aria-label"], "Insert block below");
   } finally {
     harness.unload();
