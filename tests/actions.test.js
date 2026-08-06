@@ -322,16 +322,21 @@ const createHarness = ({
     rendered: () => renderedIcon,
     renderForContainer,
     trigger: () => findInteractiveTrigger(renderedIcon)?.props || null,
+    triggerIcon: () =>
+      findInteractiveTrigger(renderedIcon)?.children?.find(
+        (child) => child?.component?.name === "Icon"
+      )?.props || null,
     unload: () => windowMock.__extension.onunload(),
   };
 };
 
-test("the trigger is a Blueprint button with a discoverable macOS tooltip", () => {
+test("the trigger uses a baseline-free Blueprint icon with a discoverable macOS tooltip", () => {
   const harness = createHarness();
   try {
     harness.renderForContainer();
     const tooltip = harness.rendered();
-    const button = tooltip.children[0];
+    const trigger = tooltip.children[0];
+    const icon = trigger.children[0];
 
     assert.equal(tooltip.component.name, "Tooltip");
     assert.equal(tooltip.props.hoverOpenDelay, 400);
@@ -344,9 +349,13 @@ test("the trigger is a Blueprint button with a discoverable macOS tooltip", () =
       tooltip.props.content,
       "Click: below · ⌘ child · ⌥ above · ⌃ parent · ⇧ delete"
     );
-    assert.equal(button.component.name, "Button");
-    assert.equal(button.props["aria-label"], "Insert block below");
-    assert.equal(button.props.minimal, true);
+    assert.equal(trigger.component, "span");
+    assert.equal(trigger.props.role, "button");
+    assert.equal(trigger.props.tabIndex, 0);
+    assert.equal(trigger.props["aria-label"], "Insert block below");
+    assert.equal(icon.component.name, "Icon");
+    assert.equal(icon.props.icon, "plus");
+    assert.equal(icon.props.size, 12);
   } finally {
     harness.unload();
   }
@@ -361,6 +370,17 @@ test("the trigger centers on the visible bullet dot without clamping top", () =>
   try {
     harness.renderForContainer();
     assert.equal(harness.buttonTop(), "-5px");
+  } finally {
+    harness.unload();
+  }
+});
+
+test("the baseline-free trigger remains keyboard accessible", async () => {
+  const harness = createHarness();
+  try {
+    harness.renderForContainer();
+    await harness.trigger().onKeyDown(harness.event({ key: "Enter" }));
+    assert.equal(harness.calls.create.length, 1);
   } finally {
     harness.unload();
   }
@@ -434,14 +454,14 @@ test("holding a modifier previews its action icon and releasing restores below",
   const harness = createHarness();
   try {
     harness.renderForContainer();
-    assert.equal(harness.trigger().icon, "plus");
+    assert.equal(harness.triggerIcon().icon, "plus");
 
     harness.fireDocumentEvent("keydown", { key: "Shift", shiftKey: true });
-    assert.equal(harness.trigger().icon, "trash");
+    assert.equal(harness.triggerIcon().icon, "trash");
     assert.equal(harness.trigger()["aria-label"], "Delete block");
 
     harness.fireDocumentEvent("keyup", { key: "Shift" });
-    assert.equal(harness.trigger().icon, "plus");
+    assert.equal(harness.triggerIcon().icon, "plus");
     assert.equal(harness.trigger()["aria-label"], "Insert block below");
   } finally {
     harness.unload();

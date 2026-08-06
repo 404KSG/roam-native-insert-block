@@ -106,9 +106,10 @@ const addStyles = () => {
       #${BUTTON_CONTAINER_ID}.${VISIBLE_CLASS} { display: flex; }
       #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: 2px; }
       #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 2px; }
-      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger.bp3-button { min-width: 20px; min-height: 20px; padding: 2px; color: #A7B6C2; border-radius: 2px; box-shadow: none; }
-      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger.bp3-button:hover { color: #5C7080; background: rgba(167, 182, 194, 0.15); }
-      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger .bp3-icon { color: inherit; }
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 20px; height: 20px; padding: 0; color: #A7B6C2; border-radius: 2px; line-height: 0; cursor: pointer; user-select: none; }
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger:hover { color: #5C7080; background: rgba(167, 182, 194, 0.15); }
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger:focus-visible { outline: 1px solid #137CBD; outline-offset: 1px; }
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger .bp3-icon { display: block; flex: none; color: inherit; }
       #${ACTION_MENU_ID} { position: fixed; z-index: 10000; min-width: 168px; padding: 4px; }
       #${ACTION_MENU_ID} .bp3-menu-item { width: 100%; border: 0; text-align: left; cursor: pointer; }
       #${ACTION_MENU_ID} .native-insert-block-menu-delete { margin-top: 4px; padding-top: 9px; border-top: 1px solid rgba(167, 182, 194, 0.35); color: #C23030; }`;
@@ -681,6 +682,11 @@ const renderButton = (container) => {
 
   const renderTrigger = (action = ACTIONS.BELOW) => {
     const presentation = getActionPresentation(action);
+    const handleTriggerKeyDown = (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      return handleInsertClick(event);
+    };
     const buttonElement = window.React.createElement(
       window.Blueprint.Core.Tooltip,
       {
@@ -690,15 +696,22 @@ const renderButton = (container) => {
         popoverClassName: "native-insert-block-tooltip",
         position: "top",
       },
-      window.React.createElement(window.Blueprint.Core.Button, {
-        "aria-label": presentation.label,
-        className: "native-insert-block-trigger",
-        icon: presentation.icon,
-        minimal: true,
-        small: true,
-        onClick: handleInsertClick,
-        onContextMenu: handleContextMenu,
-      })
+      window.React.createElement(
+        "span",
+        {
+          "aria-label": presentation.label,
+          className: "native-insert-block-trigger",
+          role: "button",
+          tabIndex: 0,
+          onClick: handleInsertClick,
+          onContextMenu: handleContextMenu,
+          onKeyDown: handleTriggerKeyDown,
+        },
+        window.React.createElement(window.Blueprint.Core.Icon, {
+          icon: presentation.icon,
+          size: 12,
+        })
+      )
     );
     window.ReactDOM.render(buttonElement, buttonContainer);
   };
