@@ -122,11 +122,30 @@ const removeStyles = () => {
   document.getElementById(STYLE_ID)?.remove();
 };
 
+const getOwnBullet = (container) => {
+  const blockInput = container?.querySelector?.(BLOCK_INPUT_SELECTOR) || null;
+  const blockMain = blockInput?.closest?.(".rm-block-main") || null;
+  const controls =
+    blockMain?.querySelector?.(".rm-block__controls") ||
+    container?.querySelector?.(".rm-block__controls") ||
+    null;
+  return (
+    controls?.querySelector?.(".rm-bullet") ||
+    (!controls ? container?.querySelector?.(".rm-bullet") : null) ||
+    null
+  );
+};
+
+const getBulletVisualAnchor = (container) => {
+  const bullet = getOwnBullet(container);
+  return bullet?.querySelector?.(".rm-bullet__inner") || bullet;
+};
+
 const determineChildrenState = (container) => {
   const childrenContainer = container.querySelector(".rm-block-children");
   const hasRenderedChildren =
     childrenContainer && container.querySelector(".roam-block-container");
-  const bullet = container.querySelector(".rm-bullet");
+  const bullet = getOwnBullet(container);
   const isCollapsedWithChildren =
     bullet && bullet.classList.contains("rm-bullet--closed");
 
@@ -205,7 +224,7 @@ const adjustButtonPosition = (
 
   const applyPosition = () => {
     const anchor =
-      container.querySelector(".rm-bullet") ||
+      getBulletVisualAnchor(container) ||
       versionState?.versionBullet ||
       versionState?.caretElement ||
       container.querySelector(BLOCK_INPUT_SELECTOR);
@@ -226,7 +245,7 @@ const adjustButtonPosition = (
         containerRect.top +
         anchorRect.height / 2 -
         measuredButtonRect.height / 2;
-      button.style.top = `${Math.max(0, Math.round(centeredTop))}px`;
+      button.style.top = `${Math.round(centeredTop)}px`;
       return;
     }
 
@@ -545,7 +564,7 @@ const renderButton = (container) => {
       const children =
         blockData[":block/children"] || blockData["block/children"] || [];
       targetOrder = children.length;
-      const bullet = container.querySelector(".rm-bullet");
+      const bullet = getOwnBullet(container);
       expandParentAfterInsert = Boolean(
         bullet?.classList?.contains?.("rm-bullet--closed") ||
         container.classList.contains("rm-block--closed")

@@ -24,10 +24,12 @@ class ClassList {
 
 const createHarness = ({
   bulletRect = { top: 110, height: 14 },
+  bulletInnerRect = bulletRect,
   collapsed = false,
   containerRect = { top: 100, height: 28 },
   deleteBlock,
   moveBlock,
+  nestedBulletRect = null,
   platform = "MacIntel",
   pullBlock,
   unmountAvailable = true,
@@ -227,17 +229,46 @@ const createHarness = ({
     clearTimeout: (id) => pendingTimers.delete(id),
   });
 
+  const bulletInner = {
+    getBoundingClientRect: () => bulletInnerRect,
+  };
   const bullet = {
     classList: new ClassList(collapsed ? ["rm-bullet--closed"] : []),
+    querySelector: (selector) =>
+      selector === ".rm-bullet__inner" ? bulletInner : null,
     getBoundingClientRect: () => bulletRect,
+  };
+  const nestedBullet = nestedBulletRect
+    ? {
+        classList: new ClassList(),
+        querySelector: (selector) =>
+          selector === ".rm-bullet__inner"
+            ? { getBoundingClientRect: () => nestedBulletRect }
+            : null,
+        getBoundingClientRect: () => nestedBulletRect,
+      }
+    : null;
+  const controls = {
+    querySelector: (selector) =>
+      selector === ".rm-bullet" ? bullet : null,
+  };
+  const blockMain = {
+    querySelector: (selector) =>
+      selector === ".rm-block__controls" ? controls : null,
+  };
+  const blockInput = {
+    id: "block-input-main-123456789",
+    closest: (selector) =>
+      selector === ".rm-block-main" ? blockMain : null,
   };
   const container = {
     classList: new ClassList(),
     querySelector(selector) {
       if (selector.startsWith("[id^='block-input']")) {
-        return { id: "block-input-main-123456789" };
+        return blockInput;
       }
-      if (selector === ".rm-bullet") return bullet;
+      if (selector === ".rm-bullet") return nestedBullet || bullet;
+      if (selector === ".rm-block__controls") return controls;
       return null;
     },
     closest: () => null,
@@ -321,14 +352,30 @@ test("the trigger is a Blueprint button with a discoverable macOS tooltip", () =
   }
 });
 
-test("the trigger is centered from the rendered bullet geometry", () => {
+test("the trigger centers on the visible bullet dot without clamping top", () => {
   const harness = createHarness({
-    bulletRect: { top: 110, height: 14 },
+    bulletRect: { top: 100, height: 18 },
+    bulletInnerRect: { top: 104, height: 6 },
     containerRect: { top: 100, height: 28 },
   });
   try {
     harness.renderForContainer();
-    assert.equal(harness.buttonTop(), "5px");
+    assert.equal(harness.buttonTop(), "-5px");
+  } finally {
+    harness.unload();
+  }
+});
+
+test("a parent block ignores nested bullet geometry", () => {
+  const harness = createHarness({
+    bulletRect: { top: 100, height: 18 },
+    bulletInnerRect: { top: 104, height: 6 },
+    containerRect: { top: 100, height: 80 },
+    nestedBulletRect: { top: 150, height: 6 },
+  });
+  try {
+    harness.renderForContainer();
+    assert.equal(harness.buttonTop(), "-5px");
   } finally {
     harness.unload();
   }
