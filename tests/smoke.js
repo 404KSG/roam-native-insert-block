@@ -119,6 +119,7 @@ const createContainer = ({ documentMode, hasChildren }) => {
 };
 
 const windowMock = {
+  navigator: { platform: "MacIntel" },
   React: {
     createElement(component, props) {
       return { component, props };
@@ -128,7 +129,13 @@ const windowMock = {
     render() {},
     unmountComponentAtNode() {},
   },
-  Blueprint: { Core: { Icon: function Icon() {} } },
+  Blueprint: {
+    Core: {
+      Button: function Button() {},
+      Icon: function Icon() {},
+      Tooltip: function Tooltip() {},
+    },
+  },
   roamAlphaAPI: {
     ui: { getFocusedBlock: () => null },
     util: { generateUID: () => "987654321" },
@@ -167,7 +174,7 @@ assert.strictEqual(
 );
 
 windowMock.__extension.onload();
-assert.strictEqual(listeners.size, 6, "onload must register all listeners");
+assert.strictEqual(listeners.size, 7, "onload must register all listeners");
 assert.ok(styleElement, "onload must add styles");
 
 const pointerMove = listeners.get("document:pointermove");

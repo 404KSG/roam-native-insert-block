@@ -1,10 +1,26 @@
 const BUTTON_CONTAINER_ID = "native-insert-block-btn-container";
+const ACTION_MENU_ID = "native-insert-block-action-menu";
 const STYLE_ID = "native-insert-block-styles";
 const BLOCK_INPUT_SELECTOR = "[id^='block-input']";
 const NO_CHILDREN_CLASS = "native-insert-block-no-children";
 const VISIBLE_CLASS = "native-insert-block-visible";
 const DOCUMENT_MODE_CLASS = "native-insert-block-document-mode";
 const ROAM_HIGHLIGHT_CLASS = "rm-block-highlight";
+const TOOLTIP_OPEN_DELAY_MS = 400;
+const ACTIONS = Object.freeze({
+  ABOVE: "above",
+  BELOW: "below",
+  CHILD: "child",
+  PARENT: "parent",
+  DELETE: "delete",
+});
+const ACTION_DETAILS = Object.freeze([
+  { action: ACTIONS.ABOVE, label: "Insert Above", icon: "arrow-up" },
+  { action: ACTIONS.BELOW, label: "Insert Below", icon: "arrow-down" },
+  { action: ACTIONS.CHILD, label: "Insert Child", icon: "indent" },
+  { action: ACTIONS.PARENT, label: "Wrap in Parent", icon: "outdent" },
+  { action: ACTIONS.DELETE, label: "Delete Block", icon: "trash" },
+]);
 const DOCUMENT_MODE_SELECTOR =
   ".rm-block--document, .rm-block__children--document";
 const DEFAULT_BUTTON_SIZE = 24;
@@ -21,7 +37,52 @@ let activeBlockInputId = null;
 let activeHighlightObserver = null;
 let scrollTimer = null;
 let pluginLoadTimer = null;
+let activeActionMenu = null;
+let activeTriggerRenderer = null;
 const focusTimers = new Set();
+
+const isMacPlatform = () => {
+  const platform =
+    window.navigator?.userAgentData?.platform ||
+    window.navigator?.platform ||
+    window.navigator?.userAgent ||
+    "";
+  return /Mac|iPhone|iPad|iPod/i.test(platform);
+};
+
+const getModifierTooltip = () =>
+  isMacPlatform()
+    ? "Click: below · ⌘ child · ⌥ above · ⌃ parent · ⇧ delete"
+    : "Click: below · Ctrl child · Alt above · Ctrl+Alt parent · Shift delete";
+
+const resolveAction = (event) => {
+  if (event.shiftKey) return ACTIONS.DELETE;
+  if (isMacPlatform()) {
+    if (event.ctrlKey) return ACTIONS.PARENT;
+    if (event.metaKey) return ACTIONS.CHILD;
+  } else {
+    if (event.ctrlKey && event.altKey) return ACTIONS.PARENT;
+    if (event.ctrlKey) return ACTIONS.CHILD;
+  }
+  if (event.altKey) return ACTIONS.ABOVE;
+  return ACTIONS.BELOW;
+};
+
+const getActionPresentation = (action) => {
+  if (action === ACTIONS.DELETE) {
+    return { icon: "trash", label: "Delete block" };
+  }
+  if (action === ACTIONS.ABOVE) {
+    return { icon: "arrow-up", label: "Insert block above" };
+  }
+  if (action === ACTIONS.CHILD) {
+    return { icon: "indent", label: "Insert child block" };
+  }
+  if (action === ACTIONS.PARENT) {
+    return { icon: "outdent", label: "Wrap block in parent" };
+  }
+  return { icon: "plus", label: "Insert block below" };
+};
 
 const scheduleFocus = (callback, delay) => {
   const timer = setTimeout(() => {
@@ -44,8 +105,12 @@ const addStyles = () => {
       #${BUTTON_CONTAINER_ID}.${VISIBLE_CLASS} { display: flex; }
       #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: 2px; }
       #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 2px; }
-      #${BUTTON_CONTAINER_ID} .bp3-icon { cursor: pointer; color: #A7B6C2; background: none; border-radius: 0; box-shadow: none; transition: color 0.1s ease-in-out; padding: 2px; }
-      #${BUTTON_CONTAINER_ID} .bp3-icon:hover { color: #5C7080; }`;
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger.bp3-button { min-width: 20px; min-height: 20px; padding: 2px; color: #A7B6C2; border-radius: 2px; box-shadow: none; }
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger.bp3-button:hover { color: #5C7080; background: rgba(167, 182, 194, 0.15); }
+      #${BUTTON_CONTAINER_ID} .native-insert-block-trigger .bp3-icon { color: inherit; }
+      #${ACTION_MENU_ID} { position: fixed; z-index: 10000; min-width: 168px; padding: 4px; }
+      #${ACTION_MENU_ID} .bp3-menu-item { width: 100%; border: 0; text-align: left; cursor: pointer; }
+      #${ACTION_MENU_ID} .native-insert-block-menu-delete { margin-top: 4px; padding-top: 9px; border-top: 1px solid rgba(167, 182, 194, 0.35); color: #C23030; }`;
   const styleElement = document.createElement("style");
   styleElement.id = STYLE_ID;
   styleElement.innerHTML = css;
@@ -187,8 +252,19 @@ const stopHighlightObserver = () => {
   }
 };
 
+const removeActionMenu = () => {
+  if (activeActionMenu) {
+    activeActionMenu.remove();
+    activeActionMenu = null;
+  } else {
+    document.getElementById(ACTION_MENU_ID)?.remove();
+  }
+};
+
 const removeButton = () => {
   stopHighlightObserver();
+  removeActionMenu();
+  activeTriggerRenderer = null;
   const button = document.getElementById(BUTTON_CONTAINER_ID);
   if (button) {
     if (window.ReactDOM?.unmountComponentAtNode) {
@@ -357,7 +433,7 @@ const renderButton = (container) => {
   const buttonContainer = document.createElement("div");
   buttonContainer.id = BUTTON_CONTAINER_ID;
 
-  const handleInsertClick = async (e) => {
+  const executeAction = async (action, e) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -366,8 +442,7 @@ const renderButton = (container) => {
 
     removeButton();
 
-    // *** 优化点：支持 Shift 删除和 Cmd 插入子块 ***
-    if (e.shiftKey) {
+    if (action === ACTIONS.DELETE) {
       try {
         await window.roamAlphaAPI.deleteBlock({ block: { uid: blockUid } });
       } catch (error) {
@@ -385,8 +460,7 @@ const renderButton = (container) => {
     let targetOrder;
     let expandParentAfterInsert = false;
 
-    if (e.ctrlKey) {
-      // Ctrl + Click: Insert Parent
+    if (action === ACTIONS.PARENT) {
       // 1. Get current parent and order
       const currentParentUid = resolveParentUid(blockData);
       const currentOrder = resolveOrder(blockData);
@@ -439,10 +513,10 @@ const renderButton = (container) => {
       return;
     }
 
-    if (e.metaKey) {
-      // Cmd + Click: Insert Child
+    if (action === ACTIONS.CHILD) {
       targetParentUid = blockUid;
-      const children = blockData[":block/children"] || blockData["block/children"] || [];
+      const children =
+        blockData[":block/children"] || blockData["block/children"] || [];
       targetOrder = children.length;
       const bullet = container.querySelector(".rm-bullet");
       expandParentAfterInsert = Boolean(
@@ -463,8 +537,7 @@ const renderButton = (container) => {
         return;
       }
 
-      if (e.altKey) {
-        // Option/Alt + Click: Insert Above
+      if (action === ACTIONS.ABOVE) {
         targetOrder = currentOrder;
       } else {
         // Normal Click: Insert Below
@@ -499,20 +572,92 @@ const renderButton = (container) => {
     }
   };
 
+  const handleInsertClick = (e) => executeAction(resolveAction(e), e);
+
   const handleContextMenu = (e) => {
-    if (!e.ctrlKey) return;
-    return handleInsertClick(e);
+    e.preventDefault();
+    e.stopPropagation();
+    removeActionMenu();
+
+    const menu = document.createElement("div");
+    menu.id = ACTION_MENU_ID;
+    menu.className = "bp3-menu bp3-elevation-2";
+    menu.role = "menu";
+    menu.setAttribute("aria-label", "Block actions");
+
+    for (const { action, label, icon } of ACTION_DETAILS) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.role = "menuitem";
+      item.textContent = label;
+      item.className = `bp3-menu-item bp3-icon-${icon}`;
+      if (action === ACTIONS.DELETE) {
+        item.className += " native-insert-block-menu-delete";
+      }
+      item.addEventListener("click", (event) => {
+        removeActionMenu();
+        return executeAction(action, event);
+      });
+      menu.appendChild(item);
+    }
+
+    document.body.appendChild(menu);
+    activeActionMenu = menu;
+
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth =
+      window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight =
+      window.innerHeight || document.documentElement.clientHeight;
+    const left = Math.max(
+      4,
+      Math.min(
+        e.clientX,
+        Math.max(
+          4,
+          (viewportWidth || e.clientX + menuRect.width) - menuRect.width - 4
+        )
+      )
+    );
+    const top = Math.max(
+      4,
+      Math.min(
+        e.clientY,
+        Math.max(
+          4,
+          (viewportHeight || e.clientY + menuRect.height) - menuRect.height - 4
+        )
+      )
+    );
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
   };
 
-  const buttonElement = window.React.createElement(window.Blueprint.Core.Icon, {
-    icon: "plus",
-    size: 12,
-    onClick: handleInsertClick,
-    onContextMenu: handleContextMenu,
-  });
+  const renderTrigger = (action = ACTIONS.BELOW) => {
+    const presentation = getActionPresentation(action);
+    const buttonElement = window.React.createElement(
+      window.Blueprint.Core.Tooltip,
+      {
+        content: getModifierTooltip(),
+        hoverOpenDelay: TOOLTIP_OPEN_DELAY_MS,
+        position: "top",
+      },
+      window.React.createElement(window.Blueprint.Core.Button, {
+        "aria-label": presentation.label,
+        className: "native-insert-block-trigger",
+        icon: presentation.icon,
+        minimal: true,
+        small: true,
+        onClick: handleInsertClick,
+        onContextMenu: handleContextMenu,
+      })
+    );
+    window.ReactDOM.render(buttonElement, buttonContainer);
+  };
 
   container.appendChild(buttonContainer);
-  window.ReactDOM.render(buttonElement, buttonContainer);
+  activeTriggerRenderer = renderTrigger;
+  renderTrigger();
   buttonContainer.classList.add(VISIBLE_CLASS);
   buttonContainer.style.visibility = "hidden";
   const versionState = getVersionState(container);
@@ -534,6 +679,12 @@ const renderButton = (container) => {
 
 const handlePointerMove = (e) => {
   const container = e.target.closest(".roam-block-container");
+  if (
+    activeActionMenu &&
+    (!container || container === activeBlockContainer)
+  ) {
+    return;
+  }
   if (!container) {
     removeButton();
     return;
@@ -554,20 +705,35 @@ const handlePointerMove = (e) => {
   renderButton(container);
 };
 
-// *** 优化点：合并 handlePointerDown 和 handleFocusIn ***
 const handleBlockInteraction = (e) => {
+  if (activeActionMenu) {
+    if (e.target.closest?.(`#${ACTION_MENU_ID}`)) return;
+    removeActionMenu();
+  }
   if (!activeBlockContainer) return;
-  // 如果交互来自按钮本身，则忽略
   if (e.target.closest(`#${BUTTON_CONTAINER_ID}`)) return;
-  // 如果交互发生在当前激活的 block 内部
   if (activeBlockContainer.contains(e.target)) {
     removeButton();
   }
 };
 
 const handleKeyDown = (e) => {
+  if (e.key === "Escape") {
+    removeActionMenu();
+    return;
+  }
+  if (["Alt", "Control", "Meta", "Shift"].includes(e.key)) {
+    activeTriggerRenderer?.(resolveAction(e));
+    return;
+  }
   if (activeBlockInputId && e.target.id === activeBlockInputId) {
     removeButton();
+  }
+};
+
+const handleKeyUp = (e) => {
+  if (["Alt", "Control", "Meta", "Shift"].includes(e.key)) {
+    activeTriggerRenderer?.(resolveAction(e));
   }
 };
 
@@ -578,6 +744,7 @@ const handlePointerLeaveViewport = (e) => {
 };
 
 const handleScroll = () => {
+  removeActionMenu();
   if (scrollTimer) return;
   scrollTimer = setTimeout(() => {
     removeButton();
@@ -593,10 +760,10 @@ const mainApp = {
       "pointerleave",
       handlePointerLeaveViewport
     );
-    // *** 优化点：使用新函数 ***
     document.addEventListener("pointerdown", handleBlockInteraction, true);
     document.addEventListener("focusin", handleBlockInteraction, true);
     document.addEventListener("keydown", handleKeyDown, true);
+    document.addEventListener("keyup", handleKeyUp, true);
     document.addEventListener("scroll", handleScroll, true);
   },
   destroy() {
@@ -608,10 +775,10 @@ const mainApp = {
       "pointerleave",
       handlePointerLeaveViewport
     );
-    // *** 优化点：使用新函数 ***
     document.removeEventListener("pointerdown", handleBlockInteraction, true);
     document.removeEventListener("focusin", handleBlockInteraction, true);
     document.removeEventListener("keydown", handleKeyDown, true);
+    document.removeEventListener("keyup", handleKeyUp, true);
     document.removeEventListener("scroll", handleScroll, true);
 
     if (scrollTimer) {
@@ -640,12 +807,11 @@ const loadPlugin = () => {
 };
 
 const unloadExisting = () => {
-  // 先卸载已经存在的 Native Insert Block 实例
   if (window.nativeInsertBlockPlugin) {
     window.nativeInsertBlockPlugin.destroy();
     delete window.nativeInsertBlockPlugin;
   }
-  // 兼容旧名字 quickInsert*
+  // Unload legacy global names left by earlier releases.
   if (window.quickInsertPlugin) {
     window.quickInsertPlugin.destroy();
     delete window.quickInsertPlugin;

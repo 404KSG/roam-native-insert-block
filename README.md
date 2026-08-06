@@ -1,16 +1,19 @@
 # Native Insert Block
 
-Add, nest, wrap, or remove Roam blocks from one small control beside the active block. The button stays aligned with your current text row, including in Document Mode.
+Add, nest, wrap, or remove Roam blocks from one small control beside the active block. It stays aligned with the current text row, including in Document Mode, and reveals every action on right-click.
 
 ![Native Insert Block in Roam Research](https://github.com/user-attachments/assets/3e0c261b-1383-439b-9f41-f5d69b38be8d)
 
 ## Controls
 
 - **Click** — insert a sibling block below.
+- **Right-click** — open the complete block action menu.
 - **Command + Click** — insert a child block.
 - **Option + Click** — insert a sibling block above.
 - **Control + Click** — wrap the current block in a new parent.
 - **Shift + Click** — delete the current block.
+
+On Windows and Linux, use **Ctrl** for a child and **Ctrl + Alt** for a parent. Hold any modifier to preview its action on the button.
 
 ## Install
 

@@ -26,6 +26,7 @@ const createHarness = ({
   collapsed = false,
   deleteBlock,
   moveBlock,
+  platform = "MacIntel",
   pullBlock,
   unmountAvailable = true,
 } = {}) => {
@@ -39,18 +40,82 @@ const createHarness = ({
   let nextTimerId = 0;
   const pendingTimers = new Set();
 
-  const makeElement = (tagName) => ({
-    tagName,
-    id: "",
-    innerHTML: "",
-    style: {},
-    classList: new ClassList(),
-    getBoundingClientRect: () => ({ top: 0, height: 24 }),
-    remove() {
-      if (this === styleElement) styleElement = null;
-      if (this === buttonContainer) buttonContainer = null;
-    },
-  });
+  const makeElement = (tagName) => {
+    const eventHandlers = new Map();
+    const element = {
+      tagName: tagName.toUpperCase(),
+      id: "",
+      innerHTML: "",
+      textContent: "",
+      className: "",
+      role: "",
+      style: {},
+      children: [],
+      parentNode: null,
+      classList: new ClassList(),
+      appendChild(child) {
+        child.parentNode = this;
+        this.children.push(child);
+        return child;
+      },
+      addEventListener(type, handler) {
+        eventHandlers.set(type, handler);
+      },
+      removeEventListener(type, handler) {
+        if (eventHandlers.get(type) === handler) eventHandlers.delete(type);
+      },
+      setAttribute(name, value) {
+        this[name] = value;
+      },
+      closest(selector) {
+        if (selector.startsWith("#") && this.id === selector.slice(1)) return this;
+        if (
+          selector.startsWith(".") &&
+          this.className.split(/\s+/).includes(selector.slice(1))
+        ) {
+          return this;
+        }
+        return this.parentNode?.closest?.(selector) || null;
+      },
+      getBoundingClientRect: () => ({
+        top: 0,
+        left: 0,
+        right: 180,
+        bottom: 200,
+        width: 180,
+        height: 200,
+      }),
+      async click() {
+        return eventHandlers.get("click")?.({
+          preventDefault() {},
+          stopPropagation() {},
+          target: this,
+        });
+      },
+      remove() {
+        if (this === styleElement) styleElement = null;
+        if (this === buttonContainer) buttonContainer = null;
+        if (this.parentNode) {
+          this.parentNode.children = this.parentNode.children.filter(
+            (child) => child !== this
+          );
+          this.parentNode = null;
+        }
+      },
+    };
+    return element;
+  };
+
+  const body = makeElement("body");
+
+  const findById = (root, id) => {
+    if (root.id === id) return root;
+    for (const child of root.children || []) {
+      const found = findById(child, id);
+      if (found) return found;
+    }
+    return null;
+  };
 
   const documentElement = {
     addEventListener(type, handler) {
@@ -63,12 +128,13 @@ const createHarness = ({
 
   const documentMock = {
     documentElement,
+    body,
     head: { appendChild: (element) => (styleElement = element) },
     createElement: makeElement,
     getElementById(id) {
       if (styleElement?.id === id) return styleElement;
       if (buttonContainer?.id === id) return buttonContainer;
-      return null;
+      return findById(body, id);
     },
     querySelector: () => null,
     addEventListener(type, handler) {
@@ -112,9 +178,22 @@ const createHarness = ({
 
   const windowMock = {
     roamAlphaAPI: api,
-    React: { createElement: (_component, props) => ({ props }) },
+    navigator: { platform },
+    React: {
+      createElement: (component, props, ...children) => ({
+        component,
+        props: props || {},
+        children,
+      }),
+    },
     ReactDOM: reactDOM,
-    Blueprint: { Core: { Icon: function Icon() {} } },
+    Blueprint: {
+      Core: {
+        Button: function Button() {},
+        Icon: function Icon() {},
+        Tooltip: function Tooltip() {},
+      },
+    },
     getComputedStyle: () => ({ top: "2px" }),
   };
 
@@ -161,12 +240,22 @@ const createHarness = ({
     getBoundingClientRect: () => ({ top: 0, height: 24 }),
   };
 
+  const findInteractiveTrigger = (node) => {
+    if (!node || typeof node !== "object") return null;
+    if (typeof node.props?.onClick === "function") return node;
+    for (const child of node.children || []) {
+      const found = findInteractiveTrigger(child);
+      if (found) return found;
+    }
+    return null;
+  };
+
   const renderForContainer = () => {
     windowMock.__extension.onload();
     listeners.get("document:pointermove")({
       target: { closest: () => container },
     });
-    return renderedIcon.props;
+    return findInteractiveTrigger(renderedIcon).props;
   };
 
   const event = (overrides = {}) => ({
@@ -184,11 +273,200 @@ const createHarness = ({
     buttonExists: () => Boolean(buttonContainer),
     errors,
     event,
+    fireDocumentEvent: (type, overrides = {}) =>
+      listeners.get(`document:${type}`)?.(
+        event({ key: "", target: { id: "" }, ...overrides })
+      ),
+    menu: () => body.children.find((child) => child.role === "menu") || null,
     pendingTimerCount: () => pendingTimers.size,
+    rendered: () => renderedIcon,
     renderForContainer,
+    trigger: () => findInteractiveTrigger(renderedIcon)?.props || null,
     unload: () => windowMock.__extension.onunload(),
   };
 };
+
+test("the trigger is a Blueprint button with a discoverable macOS tooltip", () => {
+  const harness = createHarness();
+  try {
+    harness.renderForContainer();
+    const tooltip = harness.rendered();
+    const button = tooltip.children[0];
+
+    assert.equal(tooltip.component.name, "Tooltip");
+    assert.equal(tooltip.props.hoverOpenDelay, 400);
+    assert.equal(
+      tooltip.props.content,
+      "Click: below · ⌘ child · ⌥ above · ⌃ parent · ⇧ delete"
+    );
+    assert.equal(button.component.name, "Button");
+    assert.equal(button.props["aria-label"], "Insert block below");
+    assert.equal(button.props.minimal, true);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("Windows uses Ctrl for child and Ctrl+Alt for parent", async () => {
+  const childHarness = createHarness({ platform: "Win32" });
+  try {
+    childHarness.renderForContainer();
+    assert.equal(
+      childHarness.rendered().props.content,
+      "Click: below · Ctrl child · Alt above · Ctrl+Alt parent · Shift delete"
+    );
+    await childHarness.trigger().onClick(childHarness.event({ ctrlKey: true }));
+    assert.equal(
+      childHarness.calls.create[0].location["parent-uid"],
+      "123456789"
+    );
+  } finally {
+    childHarness.unload();
+  }
+
+  const parentHarness = createHarness({ platform: "Linux x86_64" });
+  try {
+    parentHarness.renderForContainer();
+    await parentHarness
+      .trigger()
+      .onClick(parentHarness.event({ ctrlKey: true, altKey: true }));
+    assert.equal(parentHarness.calls.move.length, 1);
+    assert.equal(
+      parentHarness.calls.move[0].location["parent-uid"],
+      "newuid001"
+    );
+  } finally {
+    parentHarness.unload();
+  }
+});
+
+test("holding a modifier previews its action icon and releasing restores below", () => {
+  const harness = createHarness();
+  try {
+    harness.renderForContainer();
+    assert.equal(harness.trigger().icon, "plus");
+
+    harness.fireDocumentEvent("keydown", { key: "Shift", shiftKey: true });
+    assert.equal(harness.trigger().icon, "trash");
+    assert.equal(harness.trigger()["aria-label"], "Delete block");
+
+    harness.fireDocumentEvent("keyup", { key: "Shift" });
+    assert.equal(harness.trigger().icon, "plus");
+    assert.equal(harness.trigger()["aria-label"], "Insert block below");
+  } finally {
+    harness.unload();
+  }
+});
+
+test("right-click opens five Blueprint-style actions with a separated delete", () => {
+  const harness = createHarness();
+  try {
+    const trigger = harness.renderForContainer();
+    trigger.onContextMenu(
+      harness.event({ clientX: 120, clientY: 80, type: "contextmenu" })
+    );
+
+    const menu = harness.menu();
+    assert.ok(menu, "the action menu should be visible");
+    assert.equal(menu.className.includes("bp3-menu"), true);
+    assert.deepEqual(
+      menu.children.map((item) => item.textContent),
+      [
+        "Insert Above",
+        "Insert Below",
+        "Insert Child",
+        "Wrap in Parent",
+        "Delete Block",
+      ]
+    );
+    assert.equal(
+      menu.children[4].className.includes("native-insert-block-menu-delete"),
+      true
+    );
+  } finally {
+    harness.unload();
+  }
+});
+
+test("choosing Insert Above from the menu creates the block before its target", async () => {
+  const harness = createHarness();
+  try {
+    const trigger = harness.renderForContainer();
+    trigger.onContextMenu(
+      harness.event({ clientX: 120, clientY: 80, type: "contextmenu" })
+    );
+
+    await harness.menu().children[0].click();
+
+    assert.equal(harness.calls.create.length, 1);
+    assert.equal(harness.calls.create[0].location["parent-uid"], "parent001");
+    assert.equal(harness.calls.create[0].location.order, 1);
+    assert.equal(harness.menu(), null);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("the menu is accessible and closes on Escape, outside click, and scroll", () => {
+  const harness = createHarness();
+  try {
+    const trigger = harness.renderForContainer();
+    const openMenu = () =>
+      trigger.onContextMenu(
+        harness.event({ clientX: 120, clientY: 80, type: "contextmenu" })
+      );
+
+    openMenu();
+    assert.equal(harness.menu()["aria-label"], "Block actions");
+    assert.equal(
+      harness.menu().children.every((item) => item.role === "menuitem"),
+      true
+    );
+
+    harness.fireDocumentEvent("keydown", { key: "Escape" });
+    assert.equal(harness.menu(), null);
+
+    openMenu();
+    harness.fireDocumentEvent("pointerdown", {
+      target: { id: "", closest: () => null },
+    });
+    assert.equal(harness.menu(), null);
+
+    openMenu();
+    harness.fireDocumentEvent("scroll");
+    assert.equal(harness.menu(), null);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("unloading removes an open action menu", () => {
+  const harness = createHarness();
+  const trigger = harness.renderForContainer();
+  trigger.onContextMenu(
+    harness.event({ clientX: 120, clientY: 80, type: "contextmenu" })
+  );
+  assert.ok(harness.menu());
+  harness.unload();
+  assert.equal(harness.menu(), null);
+});
+
+test("the action menu stays open while the pointer moves into it", () => {
+  const harness = createHarness();
+  try {
+    const trigger = harness.renderForContainer();
+    trigger.onContextMenu(
+      harness.event({ clientX: 120, clientY: 80, type: "contextmenu" })
+    );
+    const menu = harness.menu();
+
+    harness.fireDocumentEvent("pointermove", { target: menu });
+
+    assert.equal(harness.menu(), menu);
+  } finally {
+    harness.unload();
+  }
+});
 
 test("a plain context-menu click never inserts a block", async () => {
   const harness = createHarness();
