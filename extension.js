@@ -43,7 +43,7 @@ const addStyles = () => {
       #${BUTTON_CONTAINER_ID} { display: none; justify-content: center; align-items: center; position: absolute; top: 18px; left: 0; height: ${DEFAULT_BUTTON_SIZE}px; width: ${DEFAULT_BUTTON_SIZE}px; z-index: 99; pointer-events: auto; }
       #${BUTTON_CONTAINER_ID}.${VISIBLE_CLASS} { display: flex; }
       #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: 2px; }
-      #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 2px; }
+      #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 1px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon { cursor: pointer; color: #A7B6C2; background: none; border-radius: 0; box-shadow: none; transition: color 0.1s ease-in-out; padding: 2px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon:hover { color: #5C7080; }`;
   const styleElement = document.createElement("style");

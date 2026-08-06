@@ -169,6 +169,12 @@ assert.strictEqual(
 windowMock.__extension.onload();
 assert.strictEqual(listeners.size, 6, "onload must register all listeners");
 assert.ok(styleElement, "onload must add styles");
+assert.ok(
+  styleElement.innerHTML.includes(
+    "#native-insert-block-btn-container.native-insert-block-document-mode { top: 1px; }"
+  ),
+  "document mode must optically align the plus icon with the row handle"
+);
 
 const pointerMove = listeners.get("document:pointermove");
 const moveOver = (container) =>
