@@ -21,6 +21,27 @@ let activeBlockInputId = null;
 let activeHighlightObserver = null;
 let scrollTimer = null;
 let pluginLoadTimer = null;
+let lifecycleGeneration = 0;
+let pluginActive = false;
+const focusTimers = new Set();
+
+const isCurrentLifecycle = (generation) =>
+  pluginActive && generation === lifecycleGeneration;
+
+const scheduleFocus = (callback, delay, generation) => {
+  if (!isCurrentLifecycle(generation)) return null;
+  const timer = setTimeout(() => {
+    focusTimers.delete(timer);
+    if (isCurrentLifecycle(generation)) callback();
+  }, delay);
+  focusTimers.add(timer);
+  return timer;
+};
+
+const clearFocusTimers = () => {
+  for (const timer of focusTimers) clearTimeout(timer);
+  focusTimers.clear();
+};
 
 const addStyles = () => {
   if (document.getElementById(STYLE_ID)) return;
@@ -28,7 +49,7 @@ const addStyles = () => {
       #${BUTTON_CONTAINER_ID} { display: none; justify-content: center; align-items: center; position: absolute; top: 18px; left: 0; height: ${DEFAULT_BUTTON_SIZE}px; width: ${DEFAULT_BUTTON_SIZE}px; z-index: 99; pointer-events: auto; }
       #${BUTTON_CONTAINER_ID}.${VISIBLE_CLASS} { display: flex; }
       #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: 2px; }
-      #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 2px; }
+      #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 1px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon { cursor: pointer; color: #A7B6C2; background: none; border-radius: 0; box-shadow: none; transition: color 0.1s ease-in-out; padding: 2px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon:hover { color: #5C7080; }`;
   const styleElement = document.createElement("style");
@@ -175,11 +196,13 @@ const stopHighlightObserver = () => {
 const removeButton = () => {
   stopHighlightObserver();
   const button = document.getElementById(BUTTON_CONTAINER_ID);
-  if (button && window.ReactDOM?.unmountComponentAtNode) {
-    try {
-      window.ReactDOM.unmountComponentAtNode(button);
-    } catch (e) {
-      /* ignore */
+  if (button) {
+    if (window.ReactDOM?.unmountComponentAtNode) {
+      try {
+        window.ReactDOM.unmountComponentAtNode(button);
+      } catch (e) {
+        /* ignore */
+      }
     }
     button.remove();
   }
@@ -209,8 +232,13 @@ const extractWindowId = (inputId) => {
   return match ? match[1] : null;
 };
 
-const focusInsertedBlock = (uid, windowId, attemptsLeft = MAX_FOCUS_ATTEMPTS) => {
-  if (!uid || attemptsLeft <= 0) {
+const focusInsertedBlock = (
+  uid,
+  windowId,
+  lifecycleToken,
+  attemptsLeft = MAX_FOCUS_ATTEMPTS
+) => {
+  if (!uid || attemptsLeft <= 0 || !isCurrentLifecycle(lifecycleToken)) {
     return;
   }
 
@@ -229,11 +257,17 @@ const focusInsertedBlock = (uid, windowId, attemptsLeft = MAX_FOCUS_ATTEMPTS) =>
   }
 
   if (!textarea) {
-    setTimeout(() => focusInsertedBlock(uid, windowId, attemptsLeft - 1), FOCUS_RETRY_DELAY_MS);
+    scheduleFocus(
+      () =>
+        focusInsertedBlock(uid, windowId, lifecycleToken, attemptsLeft - 1),
+      FOCUS_RETRY_DELAY_MS,
+      lifecycleToken
+    );
     return;
   }
 
   requestAnimationFrame(() => {
+    if (!isCurrentLifecycle(lifecycleToken)) return;
     const selectionLength =
       typeof textarea.value === "string"
         ? textarea.value.length
@@ -283,13 +317,28 @@ const pullBlockMetadata = (blockUid) => {
   }
   try {
     return pullFn(
-      "[:block/order {:block/children [:block/uid]} {:block/_children [:block/uid]} {:block/parents [:block/uid]} {:block/page [:block/uid]}]",
+      "[:block/order :block/string {:block/children [:block/uid]} {:block/_children [:block/uid]} {:block/parents [:block/uid]} {:block/page [:block/uid]}]",
       [":block/uid", blockUid]
     );
   } catch (error) {
     console.error("Native Insert Block: Failed to load block data", error);
     return null;
   }
+};
+
+const isEmptyBlock = (blockData) => {
+  if (!blockData) return false;
+  const string =
+    blockData[":block/string"] ??
+    blockData["block/string"] ??
+    blockData.string ??
+    null;
+  const children =
+    blockData[":block/children"] ??
+    blockData["block/children"] ??
+    blockData.children ??
+    null;
+  return string === "" && Array.isArray(children) && children.length === 0;
 };
 
 const resolveParentUid = (blockData) => {
@@ -343,13 +392,14 @@ const renderButton = (container) => {
 
     const focusedWindowId =
       window.roamAlphaAPI.ui?.getFocusedBlock?.()?.["window-id"] || null;
+    const lifecycleToken = lifecycleGeneration;
 
     removeButton();
 
     // *** 优化点：支持 Shift 删除和 Cmd 插入子块 ***
     if (e.shiftKey) {
       try {
-        window.roamAlphaAPI.deleteBlock({ block: { uid: blockUid } });
+        await window.roamAlphaAPI.deleteBlock({ block: { uid: blockUid } });
       } catch (error) {
         console.error("Native Insert Block: Failed to delete block", error);
       }
@@ -363,6 +413,7 @@ const renderButton = (container) => {
 
     let targetParentUid;
     let targetOrder;
+    let expandParentAfterInsert = false;
 
     if (e.ctrlKey) {
       // Ctrl + Click: Insert Parent
@@ -376,12 +427,14 @@ const renderButton = (container) => {
       }
 
       const newParentUid = window.roamAlphaAPI.util.generateUID();
+      let parentCreated = false;
       try {
         // 2. Create new parent block at current position
         await window.roamAlphaAPI.createBlock({
           location: { "parent-uid": currentParentUid, order: currentOrder },
           block: { string: "", uid: newParentUid },
         });
+        parentCreated = true;
 
         // 3. Move current block to be child of new parent
         await window.roamAlphaAPI.moveBlock({
@@ -390,11 +443,41 @@ const renderButton = (container) => {
         });
 
         // 4. Focus new parent block
-        setTimeout(
-          () => focusInsertedBlock(newParentUid, windowHint || focusedWindowId),
-          POST_INSERT_FOCUS_DELAY_MS
+        scheduleFocus(
+          () =>
+            focusInsertedBlock(
+              newParentUid,
+              windowHint || focusedWindowId,
+              lifecycleToken
+            ),
+          POST_INSERT_FOCUS_DELAY_MS,
+          lifecycleToken
         );
       } catch (error) {
+        if (parentCreated) {
+          const latestBlockData = pullBlockMetadata(blockUid);
+          const latestParentUid = resolveParentUid(latestBlockData);
+          const newParentData =
+            latestBlockData && latestParentUid !== newParentUid
+              ? pullBlockMetadata(newParentUid)
+              : null;
+          if (
+            latestBlockData &&
+            latestParentUid !== newParentUid &&
+            isEmptyBlock(newParentData)
+          ) {
+            try {
+              await window.roamAlphaAPI.deleteBlock({
+                block: { uid: newParentUid },
+              });
+            } catch (rollbackError) {
+              console.error(
+                "Native Insert Block: Failed to roll back empty parent block",
+                rollbackError
+              );
+            }
+          }
+        }
         console.error("Native Insert Block: Failed to insert parent block", error);
       }
       return;
@@ -405,9 +488,11 @@ const renderButton = (container) => {
       targetParentUid = blockUid;
       const children = blockData[":block/children"] || blockData["block/children"] || [];
       targetOrder = children.length;
-
-      // Optional: Expand block if collapsed (User didn't explicitly ask, but good UX)
-      // For now, sticking to strict insertion.
+      const bullet = container.querySelector(".rm-bullet");
+      expandParentAfterInsert = Boolean(
+        bullet?.classList?.contains?.("rm-bullet--closed") ||
+        container.classList.contains("rm-block--closed")
+      );
     } else {
       // Normal or Option Click: Need parent and current order
       targetParentUid = resolveParentUid(blockData);
@@ -437,20 +522,43 @@ const renderButton = (container) => {
         location: { "parent-uid": targetParentUid, order: targetOrder },
         block: { string: "", uid: newUid },
       });
-      setTimeout(
-        () => focusInsertedBlock(newUid, windowHint || focusedWindowId),
-        POST_INSERT_FOCUS_DELAY_MS
+      if (expandParentAfterInsert && window.roamAlphaAPI.updateBlock) {
+        try {
+          await window.roamAlphaAPI.updateBlock({
+            block: { uid: blockUid, open: true },
+          });
+        } catch (error) {
+          console.error(
+            "Native Insert Block: Failed to expand parent block",
+            error
+          );
+        }
+      }
+      scheduleFocus(
+        () =>
+          focusInsertedBlock(
+            newUid,
+            windowHint || focusedWindowId,
+            lifecycleToken
+          ),
+        POST_INSERT_FOCUS_DELAY_MS,
+        lifecycleToken
       );
     } catch (error) {
       console.error("Native Insert Block: Failed to insert block", error);
     }
   };
 
+  const handleContextMenu = (e) => {
+    if (!e.ctrlKey) return;
+    return handleInsertClick(e);
+  };
+
   const buttonElement = window.React.createElement(window.Blueprint.Core.Icon, {
     icon: "plus",
     size: 12,
     onClick: handleInsertClick,
-    onContextMenu: handleInsertClick, // Handle Ctrl+Click on Mac
+    onContextMenu: handleContextMenu,
   });
 
   container.appendChild(buttonContainer);
@@ -529,6 +637,8 @@ const handleScroll = () => {
 
 const mainApp = {
   init() {
+    lifecycleGeneration += 1;
+    pluginActive = true;
     addStyles();
     document.addEventListener("pointermove", handlePointerMove, true);
     document.documentElement.addEventListener(
@@ -542,8 +652,11 @@ const mainApp = {
     document.addEventListener("scroll", handleScroll, true);
   },
   destroy() {
+    pluginActive = false;
+    lifecycleGeneration += 1;
     removeButton();
     removeStyles();
+    clearFocusTimers();
     document.removeEventListener("pointermove", handlePointerMove, true);
     document.documentElement.removeEventListener(
       "pointerleave",
