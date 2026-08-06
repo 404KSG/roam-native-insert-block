@@ -22,12 +22,18 @@ let activeBlockInputId = null;
 let activeHighlightObserver = null;
 let scrollTimer = null;
 let pluginLoadTimer = null;
+let lifecycleGeneration = 0;
+let pluginActive = false;
 const focusTimers = new Set();
 
-const scheduleFocus = (callback, delay) => {
+const isCurrentLifecycle = (generation) =>
+  pluginActive && generation === lifecycleGeneration;
+
+const scheduleFocus = (callback, delay, generation) => {
+  if (!isCurrentLifecycle(generation)) return null;
   const timer = setTimeout(() => {
     focusTimers.delete(timer);
-    callback();
+    if (isCurrentLifecycle(generation)) callback();
   }, delay);
   focusTimers.add(timer);
   return timer;
@@ -227,8 +233,13 @@ const extractWindowId = (inputId) => {
   return match ? match[1] : null;
 };
 
-const focusInsertedBlock = (uid, windowId, attemptsLeft = MAX_FOCUS_ATTEMPTS) => {
-  if (!uid || attemptsLeft <= 0) {
+const focusInsertedBlock = (
+  uid,
+  windowId,
+  lifecycleToken,
+  attemptsLeft = MAX_FOCUS_ATTEMPTS
+) => {
+  if (!uid || attemptsLeft <= 0 || !isCurrentLifecycle(lifecycleToken)) {
     return;
   }
 
@@ -248,13 +259,16 @@ const focusInsertedBlock = (uid, windowId, attemptsLeft = MAX_FOCUS_ATTEMPTS) =>
 
   if (!textarea) {
     scheduleFocus(
-      () => focusInsertedBlock(uid, windowId, attemptsLeft - 1),
-      FOCUS_RETRY_DELAY_MS
+      () =>
+        focusInsertedBlock(uid, windowId, lifecycleToken, attemptsLeft - 1),
+      FOCUS_RETRY_DELAY_MS,
+      lifecycleToken
     );
     return;
   }
 
   requestAnimationFrame(() => {
+    if (!isCurrentLifecycle(lifecycleToken)) return;
     const selectionLength =
       typeof textarea.value === "string"
         ? textarea.value.length
@@ -304,13 +318,28 @@ const pullBlockMetadata = (blockUid) => {
   }
   try {
     return pullFn(
-      "[:block/order {:block/children [:block/uid]} {:block/_children [:block/uid]} {:block/parents [:block/uid]} {:block/page [:block/uid]}]",
+      "[:block/order :block/string {:block/children [:block/uid]} {:block/_children [:block/uid]} {:block/parents [:block/uid]} {:block/page [:block/uid]}]",
       [":block/uid", blockUid]
     );
   } catch (error) {
     console.error("Native Insert Block: Failed to load block data", error);
     return null;
   }
+};
+
+const isEmptyBlock = (blockData) => {
+  if (!blockData) return false;
+  const string =
+    blockData[":block/string"] ??
+    blockData["block/string"] ??
+    blockData.string ??
+    null;
+  const children =
+    blockData[":block/children"] ??
+    blockData["block/children"] ??
+    blockData.children ??
+    null;
+  return string === "" && Array.isArray(children) && children.length === 0;
 };
 
 const resolveParentUid = (blockData) => {
@@ -364,6 +393,7 @@ const renderButton = (container) => {
 
     const focusedWindowId =
       window.roamAlphaAPI.ui?.getFocusedBlock?.()?.["window-id"] || null;
+    const lifecycleToken = lifecycleGeneration;
 
     removeButton();
 
@@ -415,14 +445,28 @@ const renderButton = (container) => {
 
         // 4. Focus new parent block
         scheduleFocus(
-          () => focusInsertedBlock(newParentUid, windowHint || focusedWindowId),
-          POST_INSERT_FOCUS_DELAY_MS
+          () =>
+            focusInsertedBlock(
+              newParentUid,
+              windowHint || focusedWindowId,
+              lifecycleToken
+            ),
+          POST_INSERT_FOCUS_DELAY_MS,
+          lifecycleToken
         );
       } catch (error) {
         if (parentCreated) {
           const latestBlockData = pullBlockMetadata(blockUid);
           const latestParentUid = resolveParentUid(latestBlockData);
-          if (latestBlockData && latestParentUid !== newParentUid) {
+          const newParentData =
+            latestBlockData && latestParentUid !== newParentUid
+              ? pullBlockMetadata(newParentUid)
+              : null;
+          if (
+            latestBlockData &&
+            latestParentUid !== newParentUid &&
+            isEmptyBlock(newParentData)
+          ) {
             try {
               await window.roamAlphaAPI.deleteBlock({
                 block: { uid: newParentUid },
@@ -492,8 +536,14 @@ const renderButton = (container) => {
         }
       }
       scheduleFocus(
-        () => focusInsertedBlock(newUid, windowHint || focusedWindowId),
-        POST_INSERT_FOCUS_DELAY_MS
+        () =>
+          focusInsertedBlock(
+            newUid,
+            windowHint || focusedWindowId,
+            lifecycleToken
+          ),
+        POST_INSERT_FOCUS_DELAY_MS,
+        lifecycleToken
       );
     } catch (error) {
       console.error("Native Insert Block: Failed to insert block", error);
@@ -588,6 +638,8 @@ const handleScroll = () => {
 
 const mainApp = {
   init() {
+    lifecycleGeneration += 1;
+    pluginActive = true;
     addStyles();
     document.addEventListener("pointermove", handlePointerMove, true);
     document.documentElement.addEventListener(
@@ -601,6 +653,8 @@ const mainApp = {
     document.addEventListener("scroll", handleScroll, true);
   },
   destroy() {
+    pluginActive = false;
+    lifecycleGeneration += 1;
     removeButton();
     removeStyles();
     clearFocusTimers();

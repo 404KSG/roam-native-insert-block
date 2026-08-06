@@ -24,6 +24,7 @@ class ClassList {
 
 const createHarness = ({
   collapsed = false,
+  createBlock,
   deleteBlock,
   moveBlock,
   pullBlock,
@@ -87,13 +88,16 @@ const createHarness = ({
         pullBlock ||
         (() => ({
           ":block/order": 1,
+          ":block/string": "",
           ":block/children": [],
           ":block/_children": [{ ":block/uid": "parent001" }],
         })),
     },
     ui: { getFocusedBlock: () => ({ "window-id": "main" }) },
     util: { generateUID: () => `newuid00${++nextUid}` },
-    createBlock: async (args) => calls.create.push(args),
+    createBlock:
+      createBlock ||
+      (async (args) => calls.create.push(args)),
     moveBlock: moveBlock || (async (args) => calls.move.push(args)),
     updateBlock: async (args) => calls.update.push(args),
     deleteBlock: deleteBlock || (async (args) => calls.delete.push(args)),
@@ -201,6 +205,75 @@ test("a plain context-menu click never inserts a block", async () => {
   }
 });
 
+test("a plain click inserts a sibling below", async () => {
+  const harness = createHarness();
+  try {
+    const button = harness.renderForContainer();
+    await button.onClick(harness.event());
+    assert.equal(harness.calls.create[0].location["parent-uid"], "parent001");
+    assert.equal(harness.calls.create[0].location.order, 2);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("Option-click inserts a sibling above", async () => {
+  const harness = createHarness();
+  try {
+    const button = harness.renderForContainer();
+    await button.onClick(harness.event({ altKey: true }));
+    assert.equal(harness.calls.create[0].location["parent-uid"], "parent001");
+    assert.equal(harness.calls.create[0].location.order, 1);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("Command-click appends a child", async () => {
+  const harness = createHarness({
+    pullBlock: () => ({
+      ":block/order": 1,
+      ":block/string": "",
+      ":block/children": [
+        { ":block/uid": "child0001" },
+        { ":block/uid": "child0002" },
+      ],
+      ":block/_children": [{ ":block/uid": "parent001" }],
+    }),
+  });
+  try {
+    const button = harness.renderForContainer();
+    await button.onClick(harness.event({ metaKey: true }));
+    assert.equal(harness.calls.create[0].location["parent-uid"], "123456789");
+    assert.equal(harness.calls.create[0].location.order, 2);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("Control-click wraps the block in a new parent", async () => {
+  const harness = createHarness();
+  try {
+    const button = harness.renderForContainer();
+    await button.onClick(harness.event({ ctrlKey: true }));
+    assert.equal(
+      harness.calls.create[0].location["parent-uid"],
+      "parent001"
+    );
+    assert.equal(harness.calls.create[0].location.order, 1);
+    assert.equal(harness.calls.create[0].block.string, "");
+    assert.equal(harness.calls.create[0].block.uid, "newuid001");
+    assert.equal(
+      harness.calls.move[0].location["parent-uid"],
+      "newuid001"
+    );
+    assert.equal(harness.calls.move[0].location.order, 0);
+    assert.equal(harness.calls.move[0].block.uid, "123456789");
+  } finally {
+    harness.unload();
+  }
+});
+
 test("shift-click waits for Roam to finish deleting the block", async () => {
   let finishDelete;
   const harness = createHarness({
@@ -271,6 +344,68 @@ test("a failed move never deletes a parent that already contains the block", asy
   }
 });
 
+test("a failed wrap preserves a new parent that was edited concurrently", async () => {
+  const harness = createHarness({
+    pullBlock: (_query, lookup) => {
+      const uid = lookup?.[1];
+      if (uid === "newuid001") {
+        return {
+          ":block/string": "keep this",
+          ":block/children": [],
+        };
+      }
+      return {
+        ":block/order": 1,
+        ":block/string": "original",
+        ":block/children": [],
+        ":block/_children": [{ ":block/uid": "parent001" }],
+      };
+    },
+    moveBlock: async (args) => {
+      harness.calls.move.push(args);
+      throw new Error("move failed");
+    },
+  });
+  try {
+    const button = harness.renderForContainer();
+    await button.onClick(harness.event({ ctrlKey: true }));
+    assert.equal(harness.calls.delete.length, 0);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("a failed wrap preserves a new parent that gained a child", async () => {
+  const harness = createHarness({
+    pullBlock: (_query, lookup) => {
+      const uid = lookup?.[1];
+      if (uid === "newuid001") {
+        return {
+          ":block/string": "",
+          ":block/children": [{ ":block/uid": "child0001" }],
+        };
+      }
+      return {
+        ":block/order": 1,
+        ":block/string": "original",
+        ":block/children": [],
+        ":block/_children": [{ ":block/uid": "parent001" }],
+      };
+    },
+    moveBlock: async (args) => {
+      harness.calls.move.push(args);
+      throw new Error("move failed");
+    },
+  });
+  try {
+    const button = harness.renderForContainer();
+    await button.onClick(harness.event({ ctrlKey: true }));
+    assert.equal(harness.calls.delete.length, 0);
+  } finally {
+    harness.unload();
+  }
+});
+
 test("inserting a child expands a collapsed parent before focusing", async () => {
   const harness = createHarness({ collapsed: true });
   try {
@@ -293,6 +428,32 @@ test("unloading cancels delayed focus work after an insertion", async () => {
   assert.equal(harness.pendingTimerCount(), 1);
   harness.unload();
   assert.equal(harness.pendingTimerCount(), 0);
+});
+
+test("an insertion finishing after unload never schedules focus", async () => {
+  let finishCreate;
+  const harness = createHarness({
+    createBlock: (args) => {
+      harness.calls.create.push(args);
+      return new Promise((resolve) => {
+        finishCreate = resolve;
+      });
+    },
+  });
+  try {
+    const button = harness.renderForContainer();
+    const operation = button.onClick(harness.event());
+    await Promise.resolve();
+    assert.equal(harness.calls.create.length, 1);
+
+    harness.unload();
+    finishCreate();
+    await operation;
+
+    assert.equal(harness.pendingTimerCount(), 0);
+  } finally {
+    harness.unload();
+  }
 });
 
 test("unloading removes the button without the legacy React unmount API", () => {
