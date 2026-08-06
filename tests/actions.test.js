@@ -23,7 +23,9 @@ class ClassList {
 }
 
 const createHarness = ({
+  bulletRect = { top: 110, height: 14 },
   collapsed = false,
+  containerRect = { top: 100, height: 28 },
   deleteBlock,
   moveBlock,
   platform = "MacIntel",
@@ -77,14 +79,19 @@ const createHarness = ({
         }
         return this.parentNode?.closest?.(selector) || null;
       },
-      getBoundingClientRect: () => ({
-        top: 0,
-        left: 0,
-        right: 180,
-        bottom: 200,
-        width: 180,
-        height: 200,
-      }),
+      getBoundingClientRect() {
+        if (this.id === "native-insert-block-btn-container") {
+          return { top: 0, left: 0, width: 24, height: 24 };
+        }
+        return {
+          top: 0,
+          left: 0,
+          right: 180,
+          bottom: 200,
+          width: 180,
+          height: 200,
+        };
+      },
       async click() {
         return eventHandlers.get("click")?.({
           preventDefault() {},
@@ -222,6 +229,7 @@ const createHarness = ({
 
   const bullet = {
     classList: new ClassList(collapsed ? ["rm-bullet--closed"] : []),
+    getBoundingClientRect: () => bulletRect,
   };
   const container = {
     classList: new ClassList(),
@@ -237,7 +245,7 @@ const createHarness = ({
       buttonContainer = element;
     },
     contains: () => false,
-    getBoundingClientRect: () => ({ top: 0, height: 24 }),
+    getBoundingClientRect: () => containerRect,
   };
 
   const findInteractiveTrigger = (node) => {
@@ -271,6 +279,7 @@ const createHarness = ({
   return {
     calls,
     buttonExists: () => Boolean(buttonContainer),
+    buttonTop: () => buttonContainer?.style.top || "",
     errors,
     event,
     fireDocumentEvent: (type, overrides = {}) =>
@@ -295,6 +304,11 @@ test("the trigger is a Blueprint button with a discoverable macOS tooltip", () =
 
     assert.equal(tooltip.component.name, "Tooltip");
     assert.equal(tooltip.props.hoverOpenDelay, 400);
+    assert.equal(tooltip.props.interactionKind, "hover-target-only");
+    assert.equal(
+      tooltip.props.popoverClassName,
+      "native-insert-block-tooltip"
+    );
     assert.equal(
       tooltip.props.content,
       "Click: below · ⌘ child · ⌥ above · ⌃ parent · ⇧ delete"
@@ -302,6 +316,35 @@ test("the trigger is a Blueprint button with a discoverable macOS tooltip", () =
     assert.equal(button.component.name, "Button");
     assert.equal(button.props["aria-label"], "Insert block below");
     assert.equal(button.props.minimal, true);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("the trigger is centered from the rendered bullet geometry", () => {
+  const harness = createHarness({
+    bulletRect: { top: 110, height: 14 },
+    containerRect: { top: 100, height: 28 },
+  });
+  try {
+    harness.renderForContainer();
+    assert.equal(harness.buttonTop(), "5px");
+  } finally {
+    harness.unload();
+  }
+});
+
+test("moving into the Tooltip portal keeps its trigger anchor mounted", () => {
+  const harness = createHarness();
+  try {
+    harness.renderForContainer();
+    harness.fireDocumentEvent("pointermove", {
+      target: {
+        closest: (selector) =>
+          selector === ".native-insert-block-tooltip" ? {} : null,
+      },
+    });
+    assert.equal(harness.buttonExists(), true);
   } finally {
     harness.unload();
   }

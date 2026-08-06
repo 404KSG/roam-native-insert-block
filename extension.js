@@ -203,6 +203,32 @@ const adjustButtonPosition = (
   if (!container || !button) return;
 
   const applyPosition = () => {
+    const anchor =
+      container.querySelector(".rm-bullet") ||
+      versionState?.versionBullet ||
+      versionState?.caretElement ||
+      container.querySelector(BLOCK_INPUT_SELECTOR);
+    const anchorRect = anchor?.getBoundingClientRect?.();
+    const containerRect = container.getBoundingClientRect?.();
+    const measuredButtonRect = button.getBoundingClientRect?.();
+
+    if (
+      Number.isFinite(anchorRect?.top) &&
+      Number.isFinite(anchorRect?.height) &&
+      anchorRect.height > 0 &&
+      Number.isFinite(containerRect?.top) &&
+      Number.isFinite(measuredButtonRect?.height) &&
+      measuredButtonRect.height > 0
+    ) {
+      const centeredTop =
+        anchorRect.top -
+        containerRect.top +
+        anchorRect.height / 2 -
+        measuredButtonRect.height / 2;
+      button.style.top = `${Math.max(0, Math.round(centeredTop))}px`;
+      return;
+    }
+
     if (!versionState?.isVersionBlock || !shouldOffset) {
       button.style.top = "";
       return;
@@ -640,6 +666,8 @@ const renderButton = (container) => {
       {
         content: getModifierTooltip(),
         hoverOpenDelay: TOOLTIP_OPEN_DELAY_MS,
+        interactionKind: "hover-target-only",
+        popoverClassName: "native-insert-block-tooltip",
         position: "top",
       },
       window.React.createElement(window.Blueprint.Core.Button, {
@@ -678,6 +706,12 @@ const renderButton = (container) => {
 };
 
 const handlePointerMove = (e) => {
+  if (
+    activeBlockContainer &&
+    e.target.closest?.(".native-insert-block-tooltip")
+  ) {
+    return;
+  }
   const container = e.target.closest(".roam-block-container");
   if (
     activeActionMenu &&
