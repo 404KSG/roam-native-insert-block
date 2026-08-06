@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node build.js",
     "build:watch": "node build.js --watch",
-    "test": "npm run build && node --check src/index.js && node --check extension.js && node tests/smoke.js"
+    "test": "npm run build && node --check src/index.js && node --check extension.js && node tests/smoke.js && node --test tests/actions.test.js"
   },
   "keywords": [
     "roam",

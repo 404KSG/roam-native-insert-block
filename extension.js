@@ -21,6 +21,21 @@ let activeBlockInputId = null;
 let activeHighlightObserver = null;
 let scrollTimer = null;
 let pluginLoadTimer = null;
+const focusTimers = new Set();
+
+const scheduleFocus = (callback, delay) => {
+  const timer = setTimeout(() => {
+    focusTimers.delete(timer);
+    callback();
+  }, delay);
+  focusTimers.add(timer);
+  return timer;
+};
+
+const clearFocusTimers = () => {
+  for (const timer of focusTimers) clearTimeout(timer);
+  focusTimers.clear();
+};
 
 const addStyles = () => {
   if (document.getElementById(STYLE_ID)) return;
@@ -175,11 +190,13 @@ const stopHighlightObserver = () => {
 const removeButton = () => {
   stopHighlightObserver();
   const button = document.getElementById(BUTTON_CONTAINER_ID);
-  if (button && window.ReactDOM?.unmountComponentAtNode) {
-    try {
-      window.ReactDOM.unmountComponentAtNode(button);
-    } catch (e) {
-      /* ignore */
+  if (button) {
+    if (window.ReactDOM?.unmountComponentAtNode) {
+      try {
+        window.ReactDOM.unmountComponentAtNode(button);
+      } catch (e) {
+        /* ignore */
+      }
     }
     button.remove();
   }
@@ -229,7 +246,10 @@ const focusInsertedBlock = (uid, windowId, attemptsLeft = MAX_FOCUS_ATTEMPTS) =>
   }
 
   if (!textarea) {
-    setTimeout(() => focusInsertedBlock(uid, windowId, attemptsLeft - 1), FOCUS_RETRY_DELAY_MS);
+    scheduleFocus(
+      () => focusInsertedBlock(uid, windowId, attemptsLeft - 1),
+      FOCUS_RETRY_DELAY_MS
+    );
     return;
   }
 
@@ -349,7 +369,7 @@ const renderButton = (container) => {
     // *** 优化点：支持 Shift 删除和 Cmd 插入子块 ***
     if (e.shiftKey) {
       try {
-        window.roamAlphaAPI.deleteBlock({ block: { uid: blockUid } });
+        await window.roamAlphaAPI.deleteBlock({ block: { uid: blockUid } });
       } catch (error) {
         console.error("Native Insert Block: Failed to delete block", error);
       }
@@ -363,6 +383,7 @@ const renderButton = (container) => {
 
     let targetParentUid;
     let targetOrder;
+    let expandParentAfterInsert = false;
 
     if (e.ctrlKey) {
       // Ctrl + Click: Insert Parent
@@ -376,12 +397,14 @@ const renderButton = (container) => {
       }
 
       const newParentUid = window.roamAlphaAPI.util.generateUID();
+      let parentCreated = false;
       try {
         // 2. Create new parent block at current position
         await window.roamAlphaAPI.createBlock({
           location: { "parent-uid": currentParentUid, order: currentOrder },
           block: { string: "", uid: newParentUid },
         });
+        parentCreated = true;
 
         // 3. Move current block to be child of new parent
         await window.roamAlphaAPI.moveBlock({
@@ -390,11 +413,27 @@ const renderButton = (container) => {
         });
 
         // 4. Focus new parent block
-        setTimeout(
+        scheduleFocus(
           () => focusInsertedBlock(newParentUid, windowHint || focusedWindowId),
           POST_INSERT_FOCUS_DELAY_MS
         );
       } catch (error) {
+        if (parentCreated) {
+          const latestBlockData = pullBlockMetadata(blockUid);
+          const latestParentUid = resolveParentUid(latestBlockData);
+          if (latestBlockData && latestParentUid !== newParentUid) {
+            try {
+              await window.roamAlphaAPI.deleteBlock({
+                block: { uid: newParentUid },
+              });
+            } catch (rollbackError) {
+              console.error(
+                "Native Insert Block: Failed to roll back empty parent block",
+                rollbackError
+              );
+            }
+          }
+        }
         console.error("Native Insert Block: Failed to insert parent block", error);
       }
       return;
@@ -405,9 +444,11 @@ const renderButton = (container) => {
       targetParentUid = blockUid;
       const children = blockData[":block/children"] || blockData["block/children"] || [];
       targetOrder = children.length;
-
-      // Optional: Expand block if collapsed (User didn't explicitly ask, but good UX)
-      // For now, sticking to strict insertion.
+      const bullet = container.querySelector(".rm-bullet");
+      expandParentAfterInsert = Boolean(
+        bullet?.classList?.contains?.("rm-bullet--closed") ||
+        container.classList.contains("rm-block--closed")
+      );
     } else {
       // Normal or Option Click: Need parent and current order
       targetParentUid = resolveParentUid(blockData);
@@ -437,7 +478,19 @@ const renderButton = (container) => {
         location: { "parent-uid": targetParentUid, order: targetOrder },
         block: { string: "", uid: newUid },
       });
-      setTimeout(
+      if (expandParentAfterInsert && window.roamAlphaAPI.updateBlock) {
+        try {
+          await window.roamAlphaAPI.updateBlock({
+            block: { uid: blockUid, open: true },
+          });
+        } catch (error) {
+          console.error(
+            "Native Insert Block: Failed to expand parent block",
+            error
+          );
+        }
+      }
+      scheduleFocus(
         () => focusInsertedBlock(newUid, windowHint || focusedWindowId),
         POST_INSERT_FOCUS_DELAY_MS
       );
@@ -446,11 +499,16 @@ const renderButton = (container) => {
     }
   };
 
+  const handleContextMenu = (e) => {
+    if (!e.ctrlKey) return;
+    return handleInsertClick(e);
+  };
+
   const buttonElement = window.React.createElement(window.Blueprint.Core.Icon, {
     icon: "plus",
     size: 12,
     onClick: handleInsertClick,
-    onContextMenu: handleInsertClick, // Handle Ctrl+Click on Mac
+    onContextMenu: handleContextMenu,
   });
 
   container.appendChild(buttonContainer);
@@ -544,6 +602,7 @@ const mainApp = {
   destroy() {
     removeButton();
     removeStyles();
+    clearFocusTimers();
     document.removeEventListener("pointermove", handlePointerMove, true);
     document.documentElement.removeEventListener(
       "pointerleave",
