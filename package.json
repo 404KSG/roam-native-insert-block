@@ -1,12 +1,13 @@
 {
   "name": "native-insert-block",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "A Roam Research plugin for quick block insertion with keyboard modifiers",
   "main": "extension.js",
   "scripts": {
     "build": "node build.js",
     "build:watch": "node build.js --watch",
-    "test": "npm run build && node --check src/index.js && node --check extension.js && node tests/smoke.js && node --test tests/actions.test.js"
+    "test": "npm run build && node --check src/action-mode.js && node --check src/index.js && node --check roamjs.js && node --check extension.js && node tests/smoke.js && node --test tests/action-mode.test.js tests/actions.test.js && node tests/coverage.js",
+    "test:coverage": "node tests/coverage.js"
   },
   "keywords": [
     "roam",

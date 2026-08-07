@@ -8,6 +8,7 @@ const resolveActionMode = ({ shiftKey, ctrlKey, metaKey, altKey }) => {
   return "below";
 };
 
+(() => {
 const BUTTON_CONTAINER_ID = "native-insert-block-btn-container";
 const STYLE_ID = "native-insert-block-styles";
 const BLOCK_INPUT_SELECTOR = "[id^='block-input']";
@@ -735,13 +736,7 @@ const unloadExisting = () => {
   }
 };
 
-export default {
-  onload: () => {
-    unloadExisting();
-    loadPlugin();
-    window.nativeInsertBlockPlugin = mainApp;
-  },
-  onunload: () => {
-    unloadExisting();
-  },
-};
+unloadExisting();
+loadPlugin();
+window.nativeInsertBlockPlugin = mainApp;
+})();

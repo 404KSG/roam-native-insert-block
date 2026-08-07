@@ -12,11 +12,19 @@ Add, nest, wrap, or remove Roam blocks from one small control beside the active 
 - **Control + Click** — wrap the current block in a new parent.
 - **Shift + Click** — delete the current block.
 
+Use one modifier at a time. Combined modifiers are ignored to prevent accidental actions.
+
 ## Install
 
-Open **Roam Settings → Extensions**, search for **Native Insert Block**, and select **Install**.
+While the extension is awaiting Depot review, install the PR preview with this shorthand:
 
-For manual use, paste `src/index.js` into a `{{[[roam/js]]}}` code block and refresh Roam.
+```text
+404KSG+roam-native-insert-block+1406
+```
+
+After [Depot PR #1406](https://github.com/Roam-Research/roam-depot/pull/1406) is merged, open **Roam Settings → Extensions**, search for **Native Insert Block**, and select **Install**.
+
+For manual use, run `npm run build`, paste the generated `roamjs.js` into a `{{[[roam/js]]}}` code block, and refresh Roam. Use only one installation method at a time.
 
 ## Privacy
 
@@ -29,7 +37,7 @@ npm test
 npm run build
 ```
 
-Edit `src/index.js`; the build generates the Roam Depot-compatible `extension.js`.
+Edit `src/action-mode.js` for modifier behavior and `src/index.js` for the Roam runtime. The build generates `extension.js` for the Depot and `roamjs.js` for manual use.
 
 ## Credits
 

@@ -386,10 +386,16 @@ const renderButton = (container) => {
   const windowHint = extractWindowId(blockInput.id);
   const buttonContainer = document.createElement("div");
   buttonContainer.id = BUTTON_CONTAINER_ID;
+  let actionHandledForPress = false;
 
   const handleInsertClick = async (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const actionMode = resolveActionMode(e);
+    if (!actionMode) return;
+    if (actionHandledForPress) return;
+    actionHandledForPress = true;
 
     const focusedWindowId =
       window.roamAlphaAPI.ui?.getFocusedBlock?.()?.["window-id"] || null;
@@ -397,8 +403,7 @@ const renderButton = (container) => {
 
     removeButton();
 
-    // *** 优化点：支持 Shift 删除和 Cmd 插入子块 ***
-    if (e.shiftKey) {
+    if (actionMode === "delete") {
       try {
         await window.roamAlphaAPI.deleteBlock({ block: { uid: blockUid } });
       } catch (error) {
@@ -416,7 +421,7 @@ const renderButton = (container) => {
     let targetOrder;
     let expandParentAfterInsert = false;
 
-    if (e.ctrlKey) {
+    if (actionMode === "wrap") {
       // Ctrl + Click: Insert Parent
       // 1. Get current parent and order
       const currentParentUid = resolveParentUid(blockData);
@@ -484,7 +489,7 @@ const renderButton = (container) => {
       return;
     }
 
-    if (e.metaKey) {
+    if (actionMode === "child") {
       // Cmd + Click: Insert Child
       targetParentUid = blockUid;
       const children = blockData[":block/children"] || blockData["block/children"] || [];
@@ -508,7 +513,7 @@ const renderButton = (container) => {
         return;
       }
 
-      if (e.altKey) {
+      if (actionMode === "above") {
         // Option/Alt + Click: Insert Above
         targetOrder = currentOrder;
       } else {
@@ -559,6 +564,7 @@ const renderButton = (container) => {
     // Browser text selection starts during mousedown, before the click handler
     // can run. Keep the editor's current selection stable while the control is
     // pressed; the click/contextmenu handlers still own the actual action.
+    actionHandledForPress = false;
     e.preventDefault();
     e.stopPropagation();
   };

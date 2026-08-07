@@ -83,7 +83,10 @@ const documentMock = {
 const createContainer = ({ documentMode, hasChildren }) => {
   const input = { id: "block-input-main-123456789" };
   const bullet = { classList: new ClassList() };
+  const children = [bullet];
   const container = {
+    children,
+    nativeBullet: bullet,
     classList: new ClassList(),
     querySelector(selector) {
       if (selector.startsWith("[id^='block-input']")) return input;
@@ -106,6 +109,7 @@ const createContainer = ({ documentMode, hasChildren }) => {
       return null;
     },
     appendChild(element) {
+      children.push(element);
       buttonElement = element;
     },
     contains() {
@@ -186,8 +190,16 @@ const moveOver = (container) =>
     },
   });
 
-moveOver(createContainer({ documentMode: false, hasChildren: true }));
+const outlineContainer = createContainer({
+  documentMode: false,
+  hasChildren: true,
+});
+moveOver(outlineContainer);
 assert.ok(buttonElement, "outline mode must render the insert button");
+assert.ok(
+  outlineContainer.children.includes(outlineContainer.nativeBullet),
+  "rendering the insert control must preserve Roam's native bullet"
+);
 assert.strictEqual(
   buttonElement.classList.contains("native-insert-block-document-mode"),
   false,
@@ -219,5 +231,42 @@ assert.strictEqual(
   undefined,
   "onunload must remove the global plugin instance"
 );
+
+const roamjsSource = fs.readFileSync("roamjs.js", "utf8");
+const runManualBundle = () =>
+  vm.runInNewContext(roamjsSource, {
+    ...context,
+    document: documentMock,
+    window: windowMock,
+  });
+
+runManualBundle();
+assert.strictEqual(
+  listeners.size,
+  6,
+  "manual roam/js bundle must start itself"
+);
+assert.ok(
+  windowMock.nativeInsertBlockPlugin,
+  "manual roam/js bundle must register its runtime owner"
+);
+
+const firstManualRuntime = windowMock.nativeInsertBlockPlugin;
+runManualBundle();
+assert.notStrictEqual(
+  windowMock.nativeInsertBlockPlugin,
+  firstManualRuntime,
+  "reloading the manual bundle must replace the previous runtime"
+);
+assert.strictEqual(
+  listeners.size,
+  6,
+  "reloading the manual bundle must not duplicate listeners"
+);
+
+windowMock.nativeInsertBlockPlugin.destroy();
+delete windowMock.nativeInsertBlockPlugin;
+assert.strictEqual(listeners.size, 0, "manual runtime must clean up listeners");
+assert.strictEqual(styleElement, null, "manual runtime must remove styles");
 
 console.log("Native Insert Block smoke test: PASS");

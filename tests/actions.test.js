@@ -130,20 +130,24 @@ const createHarness = ({
   const moduleSource = fs
     .readFileSync("extension.js", "utf8")
     .replace("export default {", "window.__extension = {");
-  vm.runInNewContext(moduleSource, {
-    console: { ...console, error: (...args) => errors.push(args) },
-    document: documentMock,
-    window: windowMock,
-    HTMLElement: function HTMLElement() {},
-    MutationObserver: MutationObserverMock,
-    requestAnimationFrame: (callback) => callback(),
-    setTimeout: () => {
-      const id = ++nextTimerId;
-      pendingTimers.add(id);
-      return id;
+  vm.runInNewContext(
+    moduleSource,
+    {
+      console: { ...console, error: (...args) => errors.push(args) },
+      document: documentMock,
+      window: windowMock,
+      HTMLElement: function HTMLElement() {},
+      MutationObserver: MutationObserverMock,
+      requestAnimationFrame: (callback) => callback(),
+      setTimeout: () => {
+        const id = ++nextTimerId;
+        pendingTimers.add(id);
+        return id;
+      },
+      clearTimeout: (id) => pendingTimers.delete(id),
     },
-    clearTimeout: (id) => pendingTimers.delete(id),
-  });
+    { filename: "extension.js" }
+  );
 
   const bullet = {
     classList: new ClassList(collapsed ? ["rm-bullet--closed"] : []),
@@ -209,7 +213,9 @@ test("a plain click inserts a sibling below", async () => {
   const harness = createHarness();
   try {
     const button = harness.renderForContainer();
-    await button.onClick(harness.event());
+    const event = harness.event();
+    button.onMouseDown(event);
+    await button.onClick(event);
     assert.equal(harness.calls.create[0].location["parent-uid"], "parent001");
     assert.equal(harness.calls.create[0].location.order, 2);
   } finally {
@@ -248,11 +254,41 @@ test("mouse down on the insert control prevents native text selection", () => {
   }
 });
 
+test("one Shift press suppresses selection and deletes exactly once", async () => {
+  const harness = createHarness();
+  try {
+    const button = harness.renderForContainer();
+    let prevented = 0;
+    let stopped = 0;
+    const event = harness.event({
+      shiftKey: true,
+      preventDefault: () => {
+        prevented += 1;
+      },
+      stopPropagation: () => {
+        stopped += 1;
+      },
+    });
+
+    button.onMouseDown(event);
+    await button.onClick(event);
+
+    assert.equal(prevented, 2);
+    assert.equal(stopped, 2);
+    assert.equal(harness.calls.delete.length, 1);
+    assert.equal(harness.calls.delete[0].block.uid, "123456789");
+  } finally {
+    harness.unload();
+  }
+});
+
 test("Option-click inserts a sibling above", async () => {
   const harness = createHarness();
   try {
     const button = harness.renderForContainer();
-    await button.onClick(harness.event({ altKey: true }));
+    const event = harness.event({ altKey: true });
+    button.onMouseDown(event);
+    await button.onClick(event);
     assert.equal(harness.calls.create[0].location["parent-uid"], "parent001");
     assert.equal(harness.calls.create[0].location.order, 1);
   } finally {
@@ -274,7 +310,9 @@ test("Command-click appends a child", async () => {
   });
   try {
     const button = harness.renderForContainer();
-    await button.onClick(harness.event({ metaKey: true }));
+    const event = harness.event({ metaKey: true });
+    button.onMouseDown(event);
+    await button.onClick(event);
     assert.equal(harness.calls.create[0].location["parent-uid"], "123456789");
     assert.equal(harness.calls.create[0].location.order, 2);
   } finally {
@@ -305,6 +343,23 @@ test("Control-click wraps the block in a new parent", async () => {
   }
 });
 
+test("one Control press wraps the block at most once", async () => {
+  const harness = createHarness();
+  try {
+    const button = harness.renderForContainer();
+    button.onMouseDown(harness.event({ ctrlKey: true }));
+    await button.onContextMenu(
+      harness.event({ ctrlKey: true, type: "contextmenu" })
+    );
+    await button.onClick(harness.event({ ctrlKey: true }));
+
+    assert.equal(harness.calls.create.length, 1);
+    assert.equal(harness.calls.move.length, 1);
+  } finally {
+    harness.unload();
+  }
+});
+
 test("shift-click waits for Roam to finish deleting the block", async () => {
   let finishDelete;
   const harness = createHarness({
@@ -327,6 +382,25 @@ test("shift-click waits for Roam to finish deleting the block", async () => {
     finishDelete();
     await operation;
     assert.equal(settled, true);
+  } finally {
+    harness.unload();
+  }
+});
+
+test("combined modifiers never perform a block action", async () => {
+  const harness = createHarness();
+  try {
+    const button = harness.renderForContainer();
+    await button.onClick(
+      harness.event({ shiftKey: true, metaKey: true })
+    );
+
+    assert.deepEqual(harness.calls, {
+      create: [],
+      move: [],
+      update: [],
+      delete: [],
+    });
   } finally {
     harness.unload();
   }
