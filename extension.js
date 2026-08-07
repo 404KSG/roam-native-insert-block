@@ -554,11 +554,20 @@ const renderButton = (container) => {
     return handleInsertClick(e);
   };
 
+  const handleMouseDown = (e) => {
+    // Browser text selection starts during mousedown, before the click handler
+    // can run. Keep the editor's current selection stable while the control is
+    // pressed; the click/contextmenu handlers still own the actual action.
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   const buttonElement = window.React.createElement(window.Blueprint.Core.Icon, {
     icon: "plus",
     size: 12,
     onClick: handleInsertClick,
     onContextMenu: handleContextMenu,
+    onMouseDown: handleMouseDown,
   });
 
   container.appendChild(buttonContainer);

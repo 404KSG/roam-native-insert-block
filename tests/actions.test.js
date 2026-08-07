@@ -217,6 +217,37 @@ test("a plain click inserts a sibling below", async () => {
   }
 });
 
+test("mouse down on the insert control prevents native text selection", () => {
+  const harness = createHarness();
+  try {
+    const button = harness.renderForContainer();
+    let prevented = 0;
+    let stopped = 0;
+
+    button.onMouseDown(
+      harness.event({
+        preventDefault: () => {
+          prevented += 1;
+        },
+        shiftKey: true,
+        stopPropagation: () => {
+          stopped += 1;
+        },
+      })
+    );
+
+    assert.equal(prevented, 1);
+    assert.equal(stopped, 1);
+    assert.equal(
+      harness.calls.delete.length,
+      0,
+      "mouse down never performs the action"
+    );
+  } finally {
+    harness.unload();
+  }
+});
+
 test("Option-click inserts a sibling above", async () => {
   const harness = createHarness();
   try {
