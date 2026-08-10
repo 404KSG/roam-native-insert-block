@@ -1,6 +1,6 @@
 # Native Insert Block
 
-Add, nest, wrap, or remove Roam blocks from one small control beside the active block. The button stays aligned with your current text row, including in Document Mode.
+Add, nest, wrap, or remove Roam blocks from one small control beside the active block. The button follows Roam's own bullet and caret geometry, including in Document Mode and nested outlines.
 
 ![Native Insert Block in Roam Research](https://github.com/user-attachments/assets/3e0c261b-1383-439b-9f41-f5d69b38be8d)
 
