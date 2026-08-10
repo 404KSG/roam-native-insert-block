@@ -9,7 +9,6 @@ const ROAM_HIGHLIGHT_CLASS = "rm-block-highlight";
 const DOCUMENT_MODE_SELECTOR =
   ".rm-block--document, .rm-block__children--document";
 const DEFAULT_BUTTON_SIZE = 24;
-const CARET_BUTTON_GAP_PX = 6;
 const WINDOW_ID_PATTERN = /^block-input-(.+)-([a-zA-Z0-9_-]{9})$/;
 
 const MAX_FOCUS_ATTEMPTS = 20;
@@ -64,52 +63,11 @@ const removeStyles = () => {
   document.getElementById(STYLE_ID)?.remove();
 };
 
-const getOwnBlockMain = (container) => {
-  const blockInput = container?.querySelector?.(BLOCK_INPUT_SELECTOR) || null;
-  return blockInput?.closest?.(".rm-block-main") || null;
-};
-
-const getOwnControls = (container) => {
-  const blockMain = getOwnBlockMain(container);
-  return (
-    blockMain?.querySelector?.(".rm-block__controls") ||
-    container?.querySelector?.(".rm-block__controls") ||
-    null
-  );
-};
-
-const getOwnBullet = (container) => {
-  const controls = getOwnControls(container);
-  return (
-    controls?.querySelector?.(".rm-bullet") ||
-    (!controls ? container?.querySelector?.(".rm-bullet") : null) ||
-    null
-  );
-};
-
-const getBulletVisualAnchor = (container) => {
-  const bullet = getOwnBullet(container);
-  return bullet?.querySelector?.(".rm-bullet__inner") || bullet;
-};
-
-const getOwnCaretVisualAnchor = (container) => {
-  const controls = getOwnControls(container);
-  const caretCandidate =
-    controls?.querySelector?.(".rm-caret") ||
-    controls?.querySelector?.(".block-expand") ||
-    null;
-  const caret = caretCandidate?.querySelector?.(".rm-caret") || caretCandidate;
-  if (caret?.classList?.contains?.("rm-caret-hidden")) return null;
-
-  const rect = caret?.getBoundingClientRect?.();
-  return Number.isFinite(rect?.height) && rect.height > 0 ? caret : null;
-};
-
 const determineChildrenState = (container) => {
   const childrenContainer = container.querySelector(".rm-block-children");
   const hasRenderedChildren =
     childrenContainer && container.querySelector(".roam-block-container");
-  const bullet = getOwnBullet(container);
+  const bullet = container.querySelector(".rm-bullet");
   const isCollapsedWithChildren =
     bullet && bullet.classList.contains("rm-bullet--closed");
 
@@ -126,7 +84,7 @@ const getVersionState = (container) => {
     return { isVersionBlock: false };
   }
 
-  const controls = getOwnControls(container);
+  const controls = container.querySelector(".rm-block__controls");
   const caretCandidate =
     controls?.querySelector?.(".rm-caret") ||
     controls?.querySelector?.(".block-expand") ||
@@ -174,73 +132,47 @@ const updateButtonState = (container) => {
       (versionState.isVersionBlock && versionState.isCollapsed));
   button.classList.toggle(DOCUMENT_MODE_CLASS, documentMode);
   button.classList.toggle(NO_CHILDREN_CLASS, !treatAsChildren);
-  adjustButtonPosition(container, button, {
-    documentMode,
-    hasChildren: treatAsChildren,
-    versionState,
-    shouldOffset,
-  });
+  adjustButtonPosition(container, button, versionState, shouldOffset);
 };
 
 const adjustButtonPosition = (
   container,
   button,
-  {
-    documentMode = false,
-    hasChildren = false,
-    versionState = { isVersionBlock: false },
-    shouldOffset = false,
-  } = {},
+  versionState,
+  shouldOffset,
   defer = true
 ) => {
   if (!container || !button) return;
 
   const applyPosition = () => {
-    const containerRect = container.getBoundingClientRect?.();
-    const buttonRect = button.getBoundingClientRect?.();
-    const buttonHeight = buttonRect?.height || DEFAULT_BUTTON_SIZE;
-
-    if (!Number.isFinite(containerRect?.top) || !buttonHeight) {
+    if (!versionState?.isVersionBlock || !shouldOffset) {
       button.style.top = "";
       return;
     }
 
-    if (!documentMode && (hasChildren || shouldOffset)) {
-      const caret =
-        getOwnCaretVisualAnchor(container) || versionState?.caretElement || null;
-      const caretRect = caret?.getBoundingClientRect?.();
-      if (
-        Number.isFinite(caretRect?.bottom) &&
-        Number.isFinite(caretRect?.height) &&
-        caretRect.height > 0
-      ) {
-        const belowCaret =
-          caretRect.bottom - containerRect.top + CARET_BUTTON_GAP_PX;
-        button.style.top = `${Math.round(Math.max(belowCaret, 0))}px`;
-        return;
-      }
-    }
-
-    const anchor =
-      getBulletVisualAnchor(container) ||
-      versionState?.versionBullet ||
-      container.querySelector(BLOCK_INPUT_SELECTOR);
-    const anchorRect = anchor?.getBoundingClientRect?.();
-    if (
-      Number.isFinite(anchorRect?.top) &&
-      Number.isFinite(anchorRect?.height) &&
-      anchorRect.height > 0
-    ) {
-      const centeredTop =
-        anchorRect.top -
-        containerRect.top +
-        anchorRect.height / 2 -
-        buttonHeight / 2;
-      button.style.top = `${Math.round(Math.max(centeredTop, 0))}px`;
+    const buttonRect = button.getBoundingClientRect();
+    if (!buttonRect?.height) {
+      button.style.top = "";
       return;
     }
 
+    const buttonHeight = buttonRect.height || DEFAULT_BUTTON_SIZE;
+    const previousTop = button.style.top;
     button.style.top = "";
+    const defaultTop = parseFloat(
+      window.getComputedStyle(button).top || "0"
+    );
+    button.style.top = previousTop;
+
+    const baseTop = Number.isFinite(defaultTop)
+      ? defaultTop
+      : buttonRect.top - container.getBoundingClientRect().top -
+      buttonHeight / 2;
+    const offset = Math.max(baseTop, 0);
+    const rounded = Math.round(offset);
+    if (button.style.top !== `${rounded}px`) {
+      button.style.top = `${rounded}px`;
+    }
   };
 
   if (!defer) {
@@ -562,7 +494,7 @@ const renderButton = (container) => {
       targetParentUid = blockUid;
       const children = blockData[":block/children"] || blockData["block/children"] || [];
       targetOrder = children.length;
-      const bullet = getOwnBullet(container);
+      const bullet = container.querySelector(".rm-bullet");
       expandParentAfterInsert = Boolean(
         bullet?.classList?.contains?.("rm-bullet--closed") ||
         container.classList.contains("rm-block--closed")
@@ -656,15 +588,8 @@ const renderButton = (container) => {
   adjustButtonPosition(
     container,
     buttonContainer,
-    {
-      documentMode,
-      hasChildren:
-        !documentMode &&
-        (determineChildrenState(container) ||
-          (versionState.isVersionBlock && versionState.isCollapsed)),
-      versionState,
-      shouldOffset,
-    },
+    versionState,
+    shouldOffset,
     false
   );
   buttonContainer.style.visibility = "";

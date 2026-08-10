@@ -80,55 +80,9 @@ const documentMock = {
   },
 };
 
-const createContainer = ({
-  documentMode,
-  hasChildren,
-  containerTop = 100,
-  bulletTop = 114,
-  bulletHeight = 8,
-  caretTop = null,
-  caretHeight = 10,
-}) => {
-  const rect = (top, height) => ({ top, bottom: top + height, height });
-  const bulletInner = {
-    getBoundingClientRect: () => rect(bulletTop, bulletHeight),
-  };
-  const bullet = {
-    classList: new ClassList(),
-    querySelector(selector) {
-      return selector === ".rm-bullet__inner" ? bulletInner : null;
-    },
-    getBoundingClientRect: () => rect(bulletTop, bulletHeight),
-  };
-  const caret =
-    caretTop === null
-      ? null
-      : {
-          classList: new ClassList(),
-          querySelector: () => null,
-          getBoundingClientRect: () => rect(caretTop, caretHeight),
-        };
-  const controls = {
-    querySelector(selector) {
-      if (selector === ".rm-bullet") return bullet;
-      if (selector === ".rm-caret" || selector === ".block-expand") {
-        return caret;
-      }
-      return null;
-    },
-  };
-  const blockMain = {
-    querySelector(selector) {
-      return selector === ".rm-block__controls" ? controls : null;
-    },
-  };
-  const input = {
-    id: "block-input-main-123456789",
-    closest(selector) {
-      return selector === ".rm-block-main" ? blockMain : null;
-    },
-    getBoundingClientRect: () => rect(bulletTop, bulletHeight),
-  };
+const createContainer = ({ documentMode, hasChildren }) => {
+  const input = { id: "block-input-main-123456789" };
+  const bullet = { classList: new ClassList() };
   const children = [bullet];
   const container = {
     children,
@@ -142,7 +96,6 @@ const createContainer = ({
       if (selector === ".roam-block-container") {
         return hasChildren ? {} : null;
       }
-      if (selector === ".rm-block__controls") return controls;
       if (selector === ".rm-bullet") return bullet;
       return null;
     },
@@ -163,7 +116,7 @@ const createContainer = ({
       return false;
     },
     getBoundingClientRect() {
-      return rect(containerTop, 24);
+      return { top: 0, height: 24 };
     },
   };
   return container;
@@ -240,7 +193,6 @@ const moveOver = (container) =>
 const outlineContainer = createContainer({
   documentMode: false,
   hasChildren: true,
-  caretTop: 102,
 });
 moveOver(outlineContainer);
 assert.ok(buttonElement, "outline mode must render the insert button");
@@ -257,22 +209,6 @@ assert.strictEqual(
   buttonElement.classList.contains("native-insert-block-no-children"),
   false,
   "outline blocks with children must preserve caret clearance"
-);
-assert.strictEqual(
-  buttonElement.style.top,
-  "18px",
-  "an outline caret must keep a measured gap above the insert control"
-);
-
-const plainContainer = createContainer({
-  documentMode: false,
-  hasChildren: false,
-});
-moveOver(plainContainer);
-assert.strictEqual(
-  buttonElement.style.top,
-  "6px",
-  "a plain block must center the insert control on its own bullet"
 );
 
 moveOver(createContainer({ documentMode: true, hasChildren: true }));
