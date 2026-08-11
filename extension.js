@@ -33,6 +33,8 @@ let scrollTimer = null;
 let pluginLoadTimer = null;
 let lifecycleGeneration = 0;
 let pluginActive = false;
+let positionFrame = null;
+let pendingPositionApply = null;
 const focusTimers = new Set();
 
 const isCurrentLifecycle = (generation) =>
@@ -190,10 +192,28 @@ const adjustButtonPosition = (
   }
 
   if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(applyPosition);
+    // Pointer movement can call this several times before the browser paints.
+    // Keep only the latest layout pass so we do not repeatedly read/write the
+    // button geometry in the same frame.
+    pendingPositionApply = applyPosition;
+    if (positionFrame !== null) return;
+    positionFrame = requestAnimationFrame(() => {
+      positionFrame = null;
+      const pendingApply = pendingPositionApply;
+      pendingPositionApply = null;
+      pendingApply?.();
+    });
   } else {
     applyPosition();
   }
+};
+
+const cancelPendingPosition = () => {
+  if (positionFrame !== null && typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(positionFrame);
+  }
+  positionFrame = null;
+  pendingPositionApply = null;
 };
 
 const stopHighlightObserver = () => {
@@ -204,6 +224,7 @@ const stopHighlightObserver = () => {
 };
 
 const removeButton = () => {
+  cancelPendingPosition();
   stopHighlightObserver();
   const button = document.getElementById(BUTTON_CONTAINER_ID);
   if (button) {
@@ -622,7 +643,10 @@ const handlePointerMove = (e) => {
   }
 
   if (container === activeBlockContainer) {
-    updateButtonState(container);
+    // The control is already positioned for this block. Re-reading children,
+    // version state and computed layout for every pointermove is unnecessary;
+    // pointerdown/focus/keydown/scroll remove the control when the block state
+    // can change, and the next move will render it again with fresh state.
     return;
   }
 
