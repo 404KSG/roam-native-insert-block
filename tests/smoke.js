@@ -357,18 +357,39 @@ assert.strictEqual(
   "container-relative geometry must remain stable in a scrolled sidebar"
 );
 
-moveOver(
-  createContainer({
-    hasChildren: true,
-    collapsed: true,
-    containerRect: createRect(400, 30),
-    bulletRect: createRect(420, 12),
-  })
-);
+const expandedParent = createContainer({
+  hasChildren: true,
+  containerRect: createRect(360, 30),
+  bulletRect: createRect(380, 12),
+});
+moveOver(expandedParent);
 assert.strictEqual(
   buttonElement.style.top,
-  "14px",
-  "a collapsed parent with a visible Bullet must use the same geometry anchor"
+  "",
+  "a parent with visible children must retain its CSS caret-clearance placement"
+);
+assert.deepStrictEqual(
+  expandedParent.getGeometryReads(),
+  { bullet: 0, container: 0 },
+  "a parent with children must not measure itself as a leaf Bullet anchor"
+);
+
+const collapsedParent = createContainer({
+  hasChildren: true,
+  collapsed: true,
+  containerRect: createRect(400, 30),
+  bulletRect: createRect(420, 12),
+});
+moveOver(collapsedParent);
+assert.strictEqual(
+  buttonElement.style.top,
+  "",
+  "a collapsed parent must retain its CSS child placement instead of overlapping the native caret"
+);
+assert.deepStrictEqual(
+  collapsedParent.getGeometryReads(),
+  { bullet: 0, container: 0 },
+  "a parent with a native caret must not measure itself as a leaf Bullet anchor"
 );
 
 moveOver(

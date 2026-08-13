@@ -201,7 +201,14 @@ const updateButtonState = (container, defer = true) => {
       (versionState.isVersionBlock && versionState.isCollapsed));
   button.classList.toggle(DOCUMENT_MODE_CLASS, documentMode);
   button.classList.toggle(NO_CHILDREN_CLASS, !treatAsChildren);
-  adjustButtonPosition(container, button, versionState, shouldOffset, defer);
+  adjustButtonPosition(
+    container,
+    button,
+    versionState,
+    shouldOffset,
+    !hasChildren,
+    defer
+  );
 };
 
 const queueButtonPosition = (applyPosition) => {
@@ -261,12 +268,18 @@ const adjustButtonPosition = (
   button,
   versionState,
   shouldOffset,
+  shouldUseBulletAnchor,
   defer = true,
   allowRetry = true
 ) => {
   if (!container || !button) return;
 
   const applyPosition = () => {
+    if (!shouldUseBulletAnchor) {
+      applyFallbackButtonPosition(container, button, versionState, shouldOffset);
+      return;
+    }
+
     const anchor = getBulletAnchoredTop(container, button);
     if (Number.isFinite(anchor.top)) {
       const nextTop = `${anchor.top}px`;
@@ -284,6 +297,7 @@ const adjustButtonPosition = (
           button,
           versionState,
           shouldOffset,
+          shouldUseBulletAnchor,
           false,
           false
         )
