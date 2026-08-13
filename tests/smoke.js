@@ -48,18 +48,27 @@ const documentElement = {
 let styleElement = null;
 let buttonElement = null;
 
-const makeElement = (tagName) => ({
-  tagName,
-  id: "",
-  innerHTML: "",
-  style: {},
-  classList: new ClassList(),
-  getBoundingClientRect: () => ({ top: 0, height: 24 }),
-  remove() {
-    if (this === styleElement) styleElement = null;
-    if (this === buttonElement) buttonElement = null;
-  },
-});
+const createRect = (top = 0, height = 24) => ({ top, height });
+
+const makeElement = (tagName) => {
+  const element = {
+    tagName,
+    id: "",
+    innerHTML: "",
+    style: {},
+    classList: new ClassList(),
+    rect: createRect(),
+    computedStyle: {},
+    getBoundingClientRect() {
+      return { ...this.rect };
+    },
+    remove() {
+      if (this === styleElement) styleElement = null;
+      if (this === buttonElement) buttonElement = null;
+    },
+  };
+  return element;
+};
 
 const documentMock = {
   ...documentListeners,
@@ -80,11 +89,70 @@ const documentMock = {
   },
 };
 
-const createContainer = ({ documentMode, hasChildren }) => {
+const createContainer = ({
+  documentMode = false,
+  hasChildren = false,
+  collapsed = false,
+  containerRect = createRect(0, 24),
+  bulletRect = createRect(6, 12),
+  buttonRect = createRect(0, 24),
+  bulletVisible = true,
+  includeBullet = true,
+  nestedBulletRect = null,
+  bulletOrder = "own-first",
+} = {}) => {
   const input = { id: "block-input-main-123456789" };
-  const bullet = { classList: new ClassList() };
-  const children = [bullet];
-  const container = {
+  let currentBulletRect = { ...bulletRect };
+  const geometryReads = { bullet: 0, container: 0 };
+  const visualBullet = {
+    computedStyle: {
+      display: bulletVisible ? "block" : "none",
+      visibility: bulletVisible ? "visible" : "hidden",
+    },
+    getBoundingClientRect: () => {
+      geometryReads.bullet += 1;
+      return { ...currentBulletRect };
+    },
+  };
+  let container;
+  const bullet = {
+    classList: new ClassList(collapsed ? ["rm-bullet--closed"] : []),
+    closest(selector) {
+      return selector === ".roam-block-container" ? container : null;
+    },
+    querySelector(selector) {
+      return selector === ".rm-bullet__inner" ? visualBullet : null;
+    },
+  };
+  const nestedContainer = {};
+  const nestedVisualBullet = nestedBulletRect
+    ? {
+        computedStyle: { display: "block", visibility: "visible" },
+        getBoundingClientRect: () => ({ ...nestedBulletRect }),
+      }
+    : null;
+  const nestedBullet = nestedVisualBullet
+    ? {
+        classList: new ClassList(),
+        closest(selector) {
+          return selector === ".roam-block-container"
+            ? nestedContainer
+            : null;
+        },
+        querySelector(selector) {
+          return selector === ".rm-bullet__inner" ? nestedVisualBullet : null;
+        },
+      }
+    : null;
+  const bullets = includeBullet
+    ? bulletOrder === "nested-first" && nestedBullet
+      ? [nestedBullet, bullet]
+      : nestedBullet
+        ? [bullet, nestedBullet]
+        : [bullet]
+    : [];
+  const children = includeBullet ? [bullet] : [];
+  container = {
     children,
     nativeBullet: bullet,
     classList: new ClassList(),
@@ -94,10 +162,13 @@ const createContainer = ({ documentMode, hasChildren }) => {
         return hasChildren ? {} : null;
       }
       if (selector === ".roam-block-container") {
-        return hasChildren ? {} : null;
+        return hasChildren ? nestedContainer : null;
       }
-      if (selector === ".rm-bullet") return bullet;
+      if (selector === ".rm-bullet") return includeBullet ? bullet : null;
       return null;
+    },
+    querySelectorAll(selector) {
+      return selector === ".rm-bullet" ? bullets : [];
     },
     closest(selector) {
       if (
@@ -109,6 +180,7 @@ const createContainer = ({ documentMode, hasChildren }) => {
       return null;
     },
     appendChild(element) {
+      element.rect = { ...buttonRect };
       children.push(element);
       buttonElement = element;
     },
@@ -116,7 +188,14 @@ const createContainer = ({ documentMode, hasChildren }) => {
       return false;
     },
     getBoundingClientRect() {
-      return { top: 0, height: 24 };
+      geometryReads.container += 1;
+      return { ...containerRect };
+    },
+    setBulletRect(nextRect) {
+      currentBulletRect = { ...nextRect };
+    },
+    getGeometryReads() {
+      return { ...geometryReads };
     },
   };
   return container;
@@ -137,7 +216,10 @@ const windowMock = {
     ui: { getFocusedBlock: () => null },
     util: { generateUID: () => "987654321" },
   },
-  getComputedStyle: () => ({ top: "2px" }),
+  getComputedStyle: (element) => ({
+    top: "2px",
+    ...element?.computedStyle,
+  }),
 };
 
 class MutationObserverMock {
@@ -149,13 +231,26 @@ const moduleSource = fs
   .readFileSync("extension.js", "utf8")
   .replace("export default {", "window.__extension = {");
 
+let nextAnimationFrameId = 0;
+const animationFrames = new Map();
+const flushAnimationFrames = () => {
+  const callbacks = [...animationFrames.values()];
+  animationFrames.clear();
+  for (const callback of callbacks) callback();
+};
+
 const context = {
   console,
   document: documentMock,
   window: windowMock,
   HTMLElement: function HTMLElement() {},
   MutationObserver: MutationObserverMock,
-  requestAnimationFrame: (callback) => callback(),
+  requestAnimationFrame: (callback) => {
+    const id = ++nextAnimationFrameId;
+    animationFrames.set(id, callback);
+    return id;
+  },
+  cancelAnimationFrame: (id) => animationFrames.delete(id),
   setTimeout,
   clearTimeout,
 };
@@ -179,6 +274,18 @@ assert.ok(
   ),
   "document mode must optically align the plus icon with the row handle"
 );
+assert.ok(
+  styleElement.innerHTML.includes(
+    "#native-insert-block-btn-container.native-insert-block-no-children { top: 2px; }"
+  ),
+  "CSS top values must remain fallback-only defaults"
+);
+assert.ok(
+  !styleElement.innerHTML.includes(
+    "translateY(1.125px)"
+  ),
+  "the plugin must not encode a one-theme pixel correction"
+);
 
 const pointerMove = listeners.get("document:pointermove");
 const moveOver = (container) =>
@@ -189,6 +296,139 @@ const moveOver = (container) =>
       },
     },
   });
+
+const nextSibling = {
+  getBoundingClientRect: () => createRect(480.625, 24),
+};
+const siblingBefore = nextSibling.getBoundingClientRect();
+moveOver(
+  createContainer({
+    containerRect: createRect(100.5, 30),
+    bulletRect: createRect(121.625, 11.25),
+  })
+);
+assert.strictEqual(
+  buttonElement.style.top,
+  "14.75px",
+  "fractional Bullet geometry must anchor the plus relative to its container"
+);
+assert.deepStrictEqual(
+  nextSibling.getBoundingClientRect(),
+  siblingBefore,
+  "absolute plus positioning must not change adjacent Block flow"
+);
+
+const sameContainer = createContainer({
+  containerRect: createRect(160, 30),
+  bulletRect: createRect(180, 12),
+});
+moveOver(sameContainer);
+const geometryAfterFirstMove = sameContainer.getGeometryReads();
+moveOver(sameContainer);
+assert.deepStrictEqual(
+  sameContainer.getGeometryReads(),
+  geometryAfterFirstMove,
+  "repeated pointer movement over the active Block must not remeasure geometry"
+);
+
+moveOver(
+  createContainer({
+    containerRect: createRect(200, 30),
+    bulletRect: createRect(215, 10),
+    nestedBulletRect: createRect(400, 10),
+    bulletOrder: "nested-first",
+  })
+);
+assert.strictEqual(
+  buttonElement.style.top,
+  "8px",
+  "nested descendant Bullets must never become the current Block anchor"
+);
+
+moveOver(
+  createContainer({
+    containerRect: createRect(-180.5, 30),
+    bulletRect: createRect(-160.25, 11),
+  })
+);
+assert.strictEqual(
+  buttonElement.style.top,
+  "13.75px",
+  "container-relative geometry must remain stable in a scrolled sidebar"
+);
+
+moveOver(
+  createContainer({
+    hasChildren: true,
+    collapsed: true,
+    containerRect: createRect(400, 30),
+    bulletRect: createRect(420, 12),
+  })
+);
+assert.strictEqual(
+  buttonElement.style.top,
+  "14px",
+  "a collapsed parent with a visible Bullet must use the same geometry anchor"
+);
+
+moveOver(
+  createContainer({
+    documentMode: true,
+    bulletVisible: false,
+    containerRect: createRect(100, 30),
+    bulletRect: createRect(120, 12),
+  })
+);
+assert.strictEqual(
+  buttonElement.style.top,
+  "",
+  "Document Mode must retain its CSS fallback until a visible anchor exists"
+);
+
+const retryContainer = createContainer({
+  containerRect: createRect(100, 30),
+  bulletRect: createRect(120, 0),
+});
+moveOver(retryContainer);
+assert.strictEqual(
+  animationFrames.size,
+  1,
+  "zero-height geometry must schedule one retry frame"
+);
+retryContainer.setBulletRect(createRect(120, 12));
+flushAnimationFrames();
+assert.strictEqual(
+  buttonElement.style.top,
+  "14px",
+  "the single retry must apply the recovered Bullet geometry"
+);
+assert.strictEqual(
+  animationFrames.size,
+  0,
+  "a successful retry must leave no pending positioning frame"
+);
+
+const unavailableContainer = createContainer({
+  containerRect: createRect(100, 30),
+  bulletRect: createRect(120, 0),
+});
+moveOver(unavailableContainer);
+assert.strictEqual(
+  animationFrames.size,
+  1,
+  "an unavailable geometry state gets only its one retry"
+);
+flushAnimationFrames();
+assert.strictEqual(
+  buttonElement.style.top,
+  "",
+  "a persistently unavailable Bullet must fall back to CSS positioning"
+);
+assert.strictEqual(
+  animationFrames.size,
+  0,
+  "a failed retry must not schedule a second frame"
+);
 
 const outlineContainer = createContainer({
   documentMode: false,

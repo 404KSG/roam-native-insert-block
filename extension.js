@@ -88,6 +88,64 @@ const determineChildrenState = (container) => {
 const isDocumentMode = (container) =>
   Boolean(container?.closest?.(DOCUMENT_MODE_SELECTOR));
 
+const getOwnBulletAnchor = (container) => {
+  const bullets = container?.querySelectorAll?.(".rm-bullet");
+  if (!bullets) return null;
+
+  const ownBullet = Array.from(bullets).find(
+    (bullet) => bullet?.closest?.(".roam-block-container") === container
+  );
+  if (!ownBullet) return null;
+
+  return ownBullet.querySelector?.(".rm-bullet__inner") || ownBullet;
+};
+
+const getBulletAnchoredTop = (container, button) => {
+  const bullet = getOwnBulletAnchor(container);
+  if (!bullet) return { top: null, retry: false };
+
+  try {
+    const computedStyle = window.getComputedStyle?.(bullet);
+    if (
+      computedStyle?.display === "none" ||
+      computedStyle?.visibility === "hidden"
+    ) {
+      return { top: null, retry: false };
+    }
+  } catch (e) {
+    return { top: null, retry: false };
+  }
+
+  const containerRect = container.getBoundingClientRect?.();
+  const bulletRect = bullet.getBoundingClientRect?.();
+  const buttonRect = button.getBoundingClientRect?.();
+  const values = [
+    containerRect?.top,
+    containerRect?.height,
+    bulletRect?.top,
+    bulletRect?.height,
+    buttonRect?.height,
+  ];
+
+  if (!values.every(Number.isFinite)) return { top: null, retry: false };
+  if (
+    containerRect.height <= 0 ||
+    bulletRect.height <= 0 ||
+    buttonRect.height <= 0
+  ) {
+    return { top: null, retry: true };
+  }
+
+  return {
+    top:
+      bulletRect.top +
+      bulletRect.height / 2 -
+      containerRect.top -
+      buttonRect.height / 2,
+    retry: false,
+  };
+};
+
 const getVersionState = (container) => {
   const versionChoice = container.querySelector(".rm-version-choice-wrapper");
   const versionBullet = container.querySelector(".version-bullet");
@@ -129,7 +187,7 @@ const getVersionState = (container) => {
   };
 };
 
-const updateButtonState = (container) => {
+const updateButtonState = (container, defer = true) => {
   const button = document.getElementById(BUTTON_CONTAINER_ID);
   if (!button) return;
   const versionState = getVersionState(container);
@@ -143,7 +201,59 @@ const updateButtonState = (container) => {
       (versionState.isVersionBlock && versionState.isCollapsed));
   button.classList.toggle(DOCUMENT_MODE_CLASS, documentMode);
   button.classList.toggle(NO_CHILDREN_CLASS, !treatAsChildren);
-  adjustButtonPosition(container, button, versionState, shouldOffset);
+  adjustButtonPosition(container, button, versionState, shouldOffset, defer);
+};
+
+const queueButtonPosition = (applyPosition) => {
+  if (typeof requestAnimationFrame !== "function") {
+    applyPosition();
+    return;
+  }
+
+  pendingPositionApply = applyPosition;
+  if (positionFrame !== null) return;
+  positionFrame = requestAnimationFrame(() => {
+    positionFrame = null;
+    const pendingApply = pendingPositionApply;
+    pendingPositionApply = null;
+    pendingApply?.();
+  });
+};
+
+const applyFallbackButtonPosition = (
+  container,
+  button,
+  versionState,
+  shouldOffset
+) => {
+  if (!versionState?.isVersionBlock || !shouldOffset) {
+    button.style.top = "";
+    return;
+  }
+
+  const buttonRect = button.getBoundingClientRect();
+  if (!buttonRect?.height) {
+    button.style.top = "";
+    return;
+  }
+
+  const buttonHeight = buttonRect.height || DEFAULT_BUTTON_SIZE;
+  const previousTop = button.style.top;
+  button.style.top = "";
+  const defaultTop = parseFloat(
+    window.getComputedStyle(button).top || "0"
+  );
+  button.style.top = previousTop;
+
+  const baseTop = Number.isFinite(defaultTop)
+    ? defaultTop
+    : buttonRect.top - container.getBoundingClientRect().top -
+      buttonHeight / 2;
+  const offset = Math.max(baseTop, 0);
+  const rounded = Math.round(offset);
+  if (button.style.top !== `${rounded}px`) {
+    button.style.top = `${rounded}px`;
+  }
 };
 
 const adjustButtonPosition = (
@@ -151,38 +261,33 @@ const adjustButtonPosition = (
   button,
   versionState,
   shouldOffset,
-  defer = true
+  defer = true,
+  allowRetry = true
 ) => {
   if (!container || !button) return;
 
   const applyPosition = () => {
-    if (!versionState?.isVersionBlock || !shouldOffset) {
-      button.style.top = "";
+    const anchor = getBulletAnchoredTop(container, button);
+    if (Number.isFinite(anchor.top)) {
+      const nextTop = `${anchor.top}px`;
+      if (button.style.top !== nextTop) {
+        button.style.top = nextTop;
+      }
       return;
     }
 
-    const buttonRect = button.getBoundingClientRect();
-    if (!buttonRect?.height) {
-      button.style.top = "";
-      return;
-    }
-
-    const buttonHeight = buttonRect.height || DEFAULT_BUTTON_SIZE;
-    const previousTop = button.style.top;
-    button.style.top = "";
-    const defaultTop = parseFloat(
-      window.getComputedStyle(button).top || "0"
-    );
-    button.style.top = previousTop;
-
-    const baseTop = Number.isFinite(defaultTop)
-      ? defaultTop
-      : buttonRect.top - container.getBoundingClientRect().top -
-      buttonHeight / 2;
-    const offset = Math.max(baseTop, 0);
-    const rounded = Math.round(offset);
-    if (button.style.top !== `${rounded}px`) {
-      button.style.top = `${rounded}px`;
+    applyFallbackButtonPosition(container, button, versionState, shouldOffset);
+    if (allowRetry && anchor.retry) {
+      queueButtonPosition(() =>
+        adjustButtonPosition(
+          container,
+          button,
+          versionState,
+          shouldOffset,
+          false,
+          false
+        )
+      );
     }
   };
 
@@ -191,21 +296,9 @@ const adjustButtonPosition = (
     return;
   }
 
-  if (typeof requestAnimationFrame === "function") {
-    // Pointer movement can call this several times before the browser paints.
-    // Keep only the latest layout pass so we do not repeatedly read/write the
-    // button geometry in the same frame.
-    pendingPositionApply = applyPosition;
-    if (positionFrame !== null) return;
-    positionFrame = requestAnimationFrame(() => {
-      positionFrame = null;
-      const pendingApply = pendingPositionApply;
-      pendingPositionApply = null;
-      pendingApply?.();
-    });
-  } else {
-    applyPosition();
-  }
+  // Keep deferred callers coalesced into one layout pass so they do not
+  // repeatedly read/write the button geometry in the same frame.
+  queueButtonPosition(applyPosition);
 };
 
 const cancelPendingPosition = () => {
@@ -611,19 +704,8 @@ const renderButton = (container) => {
   window.ReactDOM.render(buttonElement, buttonContainer);
   buttonContainer.classList.add(VISIBLE_CLASS);
   buttonContainer.style.visibility = "hidden";
-  const versionState = getVersionState(container);
-  const documentMode = isDocumentMode(container);
-  const shouldOffset =
-    !documentMode && versionState.isVersionBlock && versionState.isCollapsed;
-  adjustButtonPosition(
-    container,
-    buttonContainer,
-    versionState,
-    shouldOffset,
-    false
-  );
+  updateButtonState(container, false);
   buttonContainer.style.visibility = "";
-  updateButtonState(container);
   watchHighlight(container);
   activeBlockContainer = container;
 };
