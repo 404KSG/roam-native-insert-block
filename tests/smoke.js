@@ -426,23 +426,26 @@ assert.strictEqual(
 
 const parentCaretCases = [
   {
-    name: "first-level parent",
+    name: "first-level parent with a safe baseline",
     containerRect: createRect(360.25, 36),
     caretRect: createRect(370.5, 9),
-    expectedTop: "23.25px",
+    buttonRect: createRect(378.25, 24),
+    expectedTop: "",
   },
   {
-    name: "second-level collapsed parent",
+    name: "second-level collapsed parent with a safe baseline",
     collapsed: true,
     containerRect: createRect(410.5, 32),
     caretRect: createRect(417.25, 10),
-    expectedTop: "20.75px",
+    buttonRect: createRect(428.5, 24),
+    expectedTop: "",
   },
   {
-    name: "third-level parent",
+    name: "third-level parent with a low native caret",
     containerRect: createRect(460.75, 31.25),
-    caretRect: createRect(468.125, 7),
-    expectedTop: "18.375px",
+    caretRect: createRect(487.125, 7),
+    buttonRect: createRect(478.75, 24),
+    expectedTop: "25.375px",
   },
 ];
 
@@ -452,7 +455,7 @@ for (const parentCase of parentCaretCases) {
   assert.strictEqual(
     buttonElement.style.top,
     parentCase.expectedTop,
-    `${parentCase.name} must place the insert control below its own native caret`
+    `${parentCase.name} must preserve the CSS baseline unless its icon center needs clearance`
   );
   assert.deepStrictEqual(
     parent.getGeometryReads(),
@@ -465,13 +468,14 @@ const parentWithNestedCaret = createContainer({
   hasChildren: true,
   containerRect: createRect(520, 30),
   caretRect: createRect(526, 8),
+  buttonRect: createRect(538, 24),
   nestedCaretRect: createRect(900, 8),
   controlsOrder: "nested-first",
 });
 moveOver(parentWithNestedCaret);
 assert.strictEqual(
   buttonElement.style.top,
-  "18px",
+  "",
   "a nested descendant caret must never become the current parent anchor"
 );
 
@@ -539,6 +543,7 @@ const retryCaretContainer = createContainer({
   hasChildren: true,
   containerRect: createRect(100, 30),
   caretRect: delayedCaretRect,
+  buttonRect: createRect(118, 24),
 });
 moveOver(retryCaretContainer);
 assert.strictEqual(
@@ -550,8 +555,8 @@ delayedCaretRect.height = 8;
 flushAnimationFrames();
 assert.strictEqual(
   buttonElement.style.top,
-  "32px",
-  "a recovered parent caret must keep its clearance after the retry"
+  "20px",
+  "a recovered parent caret must minimally clear the caret after the retry"
 );
 assert.strictEqual(
   animationFrames.size,

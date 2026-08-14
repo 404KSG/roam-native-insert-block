@@ -175,9 +175,9 @@ const getBulletAnchoredTop = (container, button) => {
   };
 };
 
-const getCaretAnchoredTop = (container) => {
+const getCaretAnchoredTop = (container, button) => {
   const caret = getOwnCaretAnchor(container);
-  if (!caret) return { top: null, retry: false };
+  if (!caret || !button) return { top: null, retry: false };
 
   try {
     const computedStyle = window.getComputedStyle?.(caret);
@@ -193,24 +193,47 @@ const getCaretAnchoredTop = (container) => {
 
   const containerRect = container.getBoundingClientRect?.();
   const caretRect = caret.getBoundingClientRect?.();
+  const previousTop = button.style.top;
+  let buttonRect;
+  try {
+    button.style.top = "";
+    buttonRect = button.getBoundingClientRect?.();
+  } finally {
+    button.style.top = previousTop;
+  }
   const values = [
     containerRect?.top,
     containerRect?.height,
     caretRect?.top,
     caretRect?.height,
+    buttonRect?.top,
+    buttonRect?.height,
   ];
 
   if (!values.every(Number.isFinite)) return { top: null, retry: false };
-  if (containerRect.height <= 0 || caretRect.height <= 0) {
+  if (
+    containerRect.height <= 0 ||
+    caretRect.height <= 0 ||
+    buttonRect.height <= 0
+  ) {
     return { top: null, retry: true };
   }
 
+  const defaultTop = buttonRect.top - containerRect.top;
+  // Keep the theme's established parent placement when it already clears the
+  // caret. The 24px button box must not start below the caret, or its centered
+  // plus icon drops by another half-box.
+  const minimumButtonCenter =
+    caretRect.top + caretRect.height + CARET_BUTTON_GAP_PX;
+  const requiredOffset = Math.max(
+    0,
+    minimumButtonCenter - (buttonRect.top + buttonRect.height / 2)
+  );
+
+  if (requiredOffset === 0) return { top: null, retry: false };
+
   return {
-    top:
-      caretRect.top +
-      caretRect.height -
-      containerRect.top +
-      CARET_BUTTON_GAP_PX,
+    top: defaultTop + requiredOffset,
     retry: false,
   };
 };
@@ -348,7 +371,7 @@ const adjustButtonPosition = (
 
   const applyPosition = () => {
     if (shouldUseCaretAnchor) {
-      const anchor = getCaretAnchoredTop(container);
+      const anchor = getCaretAnchoredTop(container, button);
       if (Number.isFinite(anchor.top)) {
         const nextTop = `${anchor.top}px`;
         if (button.style.top !== nextTop) {
