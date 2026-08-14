@@ -95,15 +95,19 @@ const createContainer = ({
   collapsed = false,
   containerRect = createRect(0, 24),
   bulletRect = createRect(6, 12),
+  caretRect = createRect(8, 8),
   buttonRect = createRect(0, 24),
   bulletVisible = true,
+  caretVisible = true,
   includeBullet = true,
   nestedBulletRect = null,
+  nestedCaretRect = null,
   bulletOrder = "own-first",
+  controlsOrder = "own-first",
 } = {}) => {
   const input = { id: "block-input-main-123456789" };
   let currentBulletRect = { ...bulletRect };
-  const geometryReads = { bullet: 0, container: 0 };
+  const geometryReads = { bullet: 0, caret: 0, container: 0 };
   const visualBullet = {
     computedStyle: {
       display: bulletVisible ? "block" : "none",
@@ -125,6 +129,66 @@ const createContainer = ({
     },
   };
   const nestedContainer = {};
+
+  const visualCaret = {
+    classList: new ClassList(collapsed ? ["rm-caret-closed"] : []),
+    computedStyle: {
+      display: caretVisible ? "block" : "none",
+      visibility: caretVisible ? "visible" : "hidden",
+    },
+    closest(selector) {
+      return selector === ".roam-block-container" ? container : null;
+    },
+    getBoundingClientRect: () => {
+      geometryReads.caret += 1;
+      return { ...caretRect };
+    },
+  };
+  const controls = {
+    closest(selector) {
+      return selector === ".roam-block-container" ? container : null;
+    },
+    querySelector(selector) {
+      if (selector === ".rm-caret" || selector === ".block-expand") {
+        return visualCaret;
+      }
+      return null;
+    },
+  };
+
+  const nestedVisualCaret = nestedCaretRect
+    ? {
+        classList: new ClassList(),
+        computedStyle: { display: "block", visibility: "visible" },
+        closest(selector) {
+          return selector === ".roam-block-container"
+            ? nestedContainer
+            : null;
+        },
+        getBoundingClientRect: () => ({ ...nestedCaretRect }),
+      }
+    : null;
+  const nestedControls = nestedVisualCaret
+    ? {
+        closest(selector) {
+          return selector === ".roam-block-container"
+            ? nestedContainer
+            : null;
+        },
+        querySelector(selector) {
+          if (selector === ".rm-caret" || selector === ".block-expand") {
+            return nestedVisualCaret;
+          }
+          return null;
+        },
+      }
+    : null;
+  const controlsList = nestedControls
+    ? controlsOrder === "nested-first"
+      ? [nestedControls, controls]
+      : [controls, nestedControls]
+    : [controls];
+
   const nestedVisualBullet = nestedBulletRect
     ? {
         computedStyle: { display: "block", visibility: "visible" },
@@ -165,10 +229,13 @@ const createContainer = ({
         return hasChildren ? nestedContainer : null;
       }
       if (selector === ".rm-bullet") return includeBullet ? bullet : null;
+      if (selector === ".rm-block__controls") return controlsList[0] || null;
       return null;
     },
     querySelectorAll(selector) {
-      return selector === ".rm-bullet" ? bullets : [];
+      if (selector === ".rm-bullet") return bullets;
+      if (selector === ".rm-block__controls") return controlsList;
+      return [];
     },
     closest(selector) {
       if (
@@ -357,39 +424,55 @@ assert.strictEqual(
   "container-relative geometry must remain stable in a scrolled sidebar"
 );
 
-const expandedParent = createContainer({
-  hasChildren: true,
-  containerRect: createRect(360, 30),
-  bulletRect: createRect(380, 12),
-});
-moveOver(expandedParent);
-assert.strictEqual(
-  buttonElement.style.top,
-  "",
-  "a parent with visible children must retain its CSS caret-clearance placement"
-);
-assert.deepStrictEqual(
-  expandedParent.getGeometryReads(),
-  { bullet: 0, container: 0 },
-  "a parent with children must not measure itself as a leaf Bullet anchor"
-);
+const parentCaretCases = [
+  {
+    name: "first-level parent",
+    containerRect: createRect(360.25, 36),
+    caretRect: createRect(370.5, 9),
+    expectedTop: "23.25px",
+  },
+  {
+    name: "second-level collapsed parent",
+    collapsed: true,
+    containerRect: createRect(410.5, 32),
+    caretRect: createRect(417.25, 10),
+    expectedTop: "20.75px",
+  },
+  {
+    name: "third-level parent",
+    containerRect: createRect(460.75, 31.25),
+    caretRect: createRect(468.125, 7),
+    expectedTop: "18.375px",
+  },
+];
 
-const collapsedParent = createContainer({
+for (const parentCase of parentCaretCases) {
+  const parent = createContainer({ hasChildren: true, ...parentCase });
+  moveOver(parent);
+  assert.strictEqual(
+    buttonElement.style.top,
+    parentCase.expectedTop,
+    `${parentCase.name} must place the insert control below its own native caret`
+  );
+  assert.deepStrictEqual(
+    parent.getGeometryReads(),
+    { bullet: 0, caret: 1, container: 1 },
+    `${parentCase.name} must measure only its own caret, never its Bullet`
+  );
+}
+
+const parentWithNestedCaret = createContainer({
   hasChildren: true,
-  collapsed: true,
-  containerRect: createRect(400, 30),
-  bulletRect: createRect(420, 12),
+  containerRect: createRect(520, 30),
+  caretRect: createRect(526, 8),
+  nestedCaretRect: createRect(900, 8),
+  controlsOrder: "nested-first",
 });
-moveOver(collapsedParent);
+moveOver(parentWithNestedCaret);
 assert.strictEqual(
   buttonElement.style.top,
-  "",
-  "a collapsed parent must retain its CSS child placement instead of overlapping the native caret"
-);
-assert.deepStrictEqual(
-  collapsedParent.getGeometryReads(),
-  { bullet: 0, container: 0 },
-  "a parent with a native caret must not measure itself as a leaf Bullet anchor"
+  "18px",
+  "a nested descendant caret must never become the current parent anchor"
 );
 
 moveOver(
@@ -449,6 +532,31 @@ assert.strictEqual(
   animationFrames.size,
   0,
   "a failed retry must not schedule a second frame"
+);
+
+const delayedCaretRect = createRect(120, 0);
+const retryCaretContainer = createContainer({
+  hasChildren: true,
+  containerRect: createRect(100, 30),
+  caretRect: delayedCaretRect,
+});
+moveOver(retryCaretContainer);
+assert.strictEqual(
+  animationFrames.size,
+  1,
+  "unavailable parent caret geometry must schedule one retry frame"
+);
+delayedCaretRect.height = 8;
+flushAnimationFrames();
+assert.strictEqual(
+  buttonElement.style.top,
+  "32px",
+  "a recovered parent caret must keep its clearance after the retry"
+);
+assert.strictEqual(
+  animationFrames.size,
+  0,
+  "a recovered parent caret must leave no pending positioning frame"
 );
 
 const outlineContainer = createContainer({

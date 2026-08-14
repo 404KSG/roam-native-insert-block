@@ -9,6 +9,7 @@ const ROAM_HIGHLIGHT_CLASS = "rm-block-highlight";
 const DOCUMENT_MODE_SELECTOR =
   ".rm-block--document, .rm-block__children--document";
 const DEFAULT_BUTTON_SIZE = 24;
+const CARET_BUTTON_GAP_PX = 4;
 const WINDOW_ID_PATTERN = /^block-input-(.+)-([a-zA-Z0-9_-]{9})$/;
 
 const MAX_FOCUS_ATTEMPTS = 20;
@@ -91,6 +92,33 @@ const getOwnBulletAnchor = (container) => {
   return ownBullet.querySelector?.(".rm-bullet__inner") || ownBullet;
 };
 
+const getOwnControls = (container) => {
+  const controls = container?.querySelectorAll?.(".rm-block__controls");
+  if (!controls) return null;
+
+  return (
+    Array.from(controls).find(
+      (control) => control?.closest?.(".roam-block-container") === container
+    ) || null
+  );
+};
+
+const getOwnCaretAnchor = (container) => {
+  const controls = getOwnControls(container);
+  if (!controls) return null;
+
+  const caretCandidate =
+    controls.querySelector?.(".rm-caret") ||
+    controls.querySelector?.(".block-expand") ||
+    null;
+  const nestedCaret = caretCandidate?.querySelector?.(".rm-caret") || null;
+  const caret = nestedCaret || caretCandidate;
+
+  return caret?.closest?.(".roam-block-container") === container
+    ? caret
+    : null;
+};
+
 const getBulletAnchoredTop = (container, button) => {
   const bullet = getOwnBulletAnchor(container);
   if (!bullet) return { top: null, retry: false };
@@ -133,6 +161,46 @@ const getBulletAnchoredTop = (container, button) => {
       bulletRect.height / 2 -
       containerRect.top -
       buttonRect.height / 2,
+    retry: false,
+  };
+};
+
+const getCaretAnchoredTop = (container) => {
+  const caret = getOwnCaretAnchor(container);
+  if (!caret) return { top: null, retry: false };
+
+  try {
+    const computedStyle = window.getComputedStyle?.(caret);
+    if (
+      computedStyle?.display === "none" ||
+      computedStyle?.visibility === "hidden"
+    ) {
+      return { top: null, retry: false };
+    }
+  } catch (e) {
+    return { top: null, retry: false };
+  }
+
+  const containerRect = container.getBoundingClientRect?.();
+  const caretRect = caret.getBoundingClientRect?.();
+  const values = [
+    containerRect?.top,
+    containerRect?.height,
+    caretRect?.top,
+    caretRect?.height,
+  ];
+
+  if (!values.every(Number.isFinite)) return { top: null, retry: false };
+  if (containerRect.height <= 0 || caretRect.height <= 0) {
+    return { top: null, retry: true };
+  }
+
+  return {
+    top:
+      caretRect.top +
+      caretRect.height -
+      containerRect.top +
+      CARET_BUTTON_GAP_PX,
     retry: false,
   };
 };
@@ -190,6 +258,7 @@ const updateButtonState = (container, defer = true) => {
     !documentMode &&
     (hasChildren ||
       (versionState.isVersionBlock && versionState.isCollapsed));
+  const shouldUseCaretAnchor = !documentMode && hasChildren;
   button.classList.toggle(DOCUMENT_MODE_CLASS, documentMode);
   button.classList.toggle(NO_CHILDREN_CLASS, !treatAsChildren);
   adjustButtonPosition(
@@ -198,6 +267,7 @@ const updateButtonState = (container, defer = true) => {
     versionState,
     shouldOffset,
     !hasChildren,
+    shouldUseCaretAnchor,
     defer
   );
 };
@@ -260,12 +330,41 @@ const adjustButtonPosition = (
   versionState,
   shouldOffset,
   shouldUseBulletAnchor,
+  shouldUseCaretAnchor,
   defer = true,
   allowRetry = true
 ) => {
   if (!container || !button) return;
 
   const applyPosition = () => {
+    if (shouldUseCaretAnchor) {
+      const anchor = getCaretAnchoredTop(container);
+      if (Number.isFinite(anchor.top)) {
+        const nextTop = `${anchor.top}px`;
+        if (button.style.top !== nextTop) {
+          button.style.top = nextTop;
+        }
+        return;
+      }
+
+      applyFallbackButtonPosition(container, button, versionState, shouldOffset);
+      if (allowRetry && anchor.retry) {
+        queueButtonPosition(() =>
+          adjustButtonPosition(
+            container,
+            button,
+            versionState,
+            shouldOffset,
+            shouldUseBulletAnchor,
+            shouldUseCaretAnchor,
+            false,
+            false
+          )
+        );
+      }
+      return;
+    }
+
     if (!shouldUseBulletAnchor) {
       applyFallbackButtonPosition(container, button, versionState, shouldOffset);
       return;
@@ -289,6 +388,7 @@ const adjustButtonPosition = (
           versionState,
           shouldOffset,
           shouldUseBulletAnchor,
+          shouldUseCaretAnchor,
           false,
           false
         )
