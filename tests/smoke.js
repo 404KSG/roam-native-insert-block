@@ -105,7 +105,12 @@ const createContainer = ({
   bulletOrder = "own-first",
   controlsOrder = "own-first",
 } = {}) => {
-  const input = { id: "block-input-main-123456789" };
+  const input = {
+    id: "block-input-main-123456789",
+    closest(selector) {
+      return selector === ".roam-block-container" ? container : null;
+    },
+  };
   let currentBulletRect = { ...bulletRect };
   const geometryReads = { bullet: 0, caret: 0, container: 0 };
   const visualBullet = {
@@ -220,6 +225,10 @@ const createContainer = ({
     children,
     nativeBullet: bullet,
     classList: new ClassList(),
+    attributes: { "data-block-uid": "123456789" },
+    getAttribute(name) {
+      return this.attributes[name] ?? null;
+    },
     querySelector(selector) {
       if (selector.startsWith("[id^='block-input']")) return input;
       if (selector === ".rm-block-children") {
@@ -233,6 +242,7 @@ const createContainer = ({
       return null;
     },
     querySelectorAll(selector) {
+      if (selector.startsWith("[id^='block-input']")) return [input];
       if (selector === ".rm-bullet") return bullets;
       if (selector === ".rm-block__controls") return controlsList;
       return [];

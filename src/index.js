@@ -1,7 +1,10 @@
 (() => {
 const BUTTON_CONTAINER_ID = "native-insert-block-btn-container";
 const STYLE_ID = "native-insert-block-styles";
+const STATUS_ID = "native-insert-block-status";
 const BLOCK_INPUT_SELECTOR = "[id^='block-input']";
+const BLOCK_INPUT_ID_PREFIX = "block-input-";
+const BLOCK_CONTAINER_SELECTOR = ".roam-block-container";
 const NO_CHILDREN_CLASS = "native-insert-block-no-children";
 const VISIBLE_CLASS = "native-insert-block-visible";
 const DOCUMENT_MODE_CLASS = "native-insert-block-document-mode";
@@ -10,7 +13,7 @@ const DOCUMENT_MODE_SELECTOR =
   ".rm-block--document, .rm-block__children--document";
 const DEFAULT_BUTTON_SIZE = 24;
 const CARET_BUTTON_GAP_PX = 4;
-const WINDOW_ID_PATTERN = /^block-input-(.+)-([a-zA-Z0-9_-]{9})$/;
+const STATUS_VISIBLE_MS = 2500;
 
 const MAX_FOCUS_ATTEMPTS = 20;
 const FOCUS_RETRY_DELAY_MS = 60;
@@ -20,10 +23,13 @@ const SCROLL_THROTTLE_MS = 100;
 
 let activeBlockContainer = null;
 let activeBlockInputId = null;
+let activeTargetSnapshot = null;
 let activeHighlightObserver = null;
+let statusTimer = null;
 let scrollTimer = null;
 let pluginLoadTimer = null;
 let lifecycleGeneration = 0;
+let latestFocusOperation = 0;
 let pluginActive = false;
 let positionFrame = null;
 let pendingPositionApply = null;
@@ -55,7 +61,8 @@ const addStyles = () => {
       #${BUTTON_CONTAINER_ID}.${NO_CHILDREN_CLASS} { top: 2px; }
       #${BUTTON_CONTAINER_ID}.${DOCUMENT_MODE_CLASS} { top: 1px; }
       #${BUTTON_CONTAINER_ID} .bp3-icon { cursor: pointer; color: #A7B6C2; background: none; border-radius: 0; box-shadow: none; transition: color 0.1s ease-in-out; padding: 2px; }
-      #${BUTTON_CONTAINER_ID} .bp3-icon:hover { color: #5C7080; }`;
+      #${BUTTON_CONTAINER_ID} .bp3-icon:hover { color: #5C7080; }
+      #${STATUS_ID} { position: fixed; right: 16px; bottom: 16px; z-index: 9999; pointer-events: none; max-width: 280px; padding: 8px 10px; border-radius: 4px; background: #182026; color: #f5f8fa; font-size: 12px; line-height: 1.4; }`;
   const styleElement = document.createElement("style");
   styleElement.id = STYLE_ID;
   styleElement.innerHTML = css;
@@ -80,16 +87,144 @@ const determineChildrenState = (container) => {
 const isDocumentMode = (container) =>
   Boolean(container?.closest?.(DOCUMENT_MODE_SELECTOR));
 
-const getOwnBulletAnchor = (container) => {
+const getOwnBullet = (container) => {
   const bullets = container?.querySelectorAll?.(".rm-bullet");
   if (!bullets) return null;
 
-  const ownBullet = Array.from(bullets).find(
-    (bullet) => bullet?.closest?.(".roam-block-container") === container
+  return (
+    Array.from(bullets).find(
+      (bullet) => bullet?.closest?.(BLOCK_CONTAINER_SELECTOR) === container
+    ) || null
   );
-  if (!ownBullet) return null;
+};
 
+const getOwnBulletAnchor = (container) => {
+  const ownBullet = getOwnBullet(container);
+  if (!ownBullet) return null;
   return ownBullet.querySelector?.(".rm-bullet__inner") || ownBullet;
+};
+
+const getOwnBlockInput = (container) => {
+  const inputs = container?.querySelectorAll?.(BLOCK_INPUT_SELECTOR);
+  if (!inputs || inputs.length === 0) return null;
+
+  return (
+    Array.from(inputs).find(
+      (input) => input?.closest?.(BLOCK_CONTAINER_SELECTOR) === container
+    ) || null
+  );
+};
+
+const readAttr = (node, name) => {
+  if (!node || typeof name !== "string") return null;
+  if (typeof node.getAttribute === "function") {
+    const value = node.getAttribute(name);
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  if (name === "data-block-uid") {
+    const value = node.dataset?.blockUid;
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  if (name === "data-uid") {
+    const value = node.dataset?.uid;
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return null;
+};
+
+const isNodeConnected = (node) => {
+  if (!node) return false;
+  if (typeof node.isConnected === "boolean") return node.isConnected;
+  try {
+    if (typeof document.contains === "function") {
+      return document.contains(node);
+    }
+  } catch (error) {
+    /* ignore */
+  }
+  return true;
+};
+
+const captureTargetSnapshot = (container) => {
+  const input = getOwnBlockInput(container);
+  if (!input) return null;
+  return {
+    container,
+    input,
+    inputId: typeof input.id === "string" ? input.id : "",
+    blockUid: readAttr(container, "data-block-uid"),
+    inputDataUid: readAttr(input, "data-uid"),
+    inputDataBlockUid: readAttr(input, "data-block-uid"),
+    containerDataUid: readAttr(container, "data-uid"),
+  };
+};
+
+const snapshotsMatch = (left, right) =>
+  Boolean(
+    left &&
+      right &&
+      left.container === right.container &&
+      left.input === right.input &&
+      left.inputId === right.inputId &&
+      left.blockUid === right.blockUid &&
+      left.inputDataUid === right.inputDataUid &&
+      left.inputDataBlockUid === right.inputDataBlockUid &&
+      left.containerDataUid === right.containerDataUid
+  );
+
+const parseWindowIdFromInput = (inputId, uid) => {
+  if (typeof inputId !== "string" || typeof uid !== "string" || !uid) {
+    return null;
+  }
+  if (!inputId.startsWith(BLOCK_INPUT_ID_PREFIX)) return null;
+  const suffix = `-${uid}`;
+  if (!inputId.endsWith(suffix)) return null;
+  const windowId = inputId.slice(
+    BLOCK_INPUT_ID_PREFIX.length,
+    inputId.length - suffix.length
+  );
+  if (!windowId) return null;
+  if (`${BLOCK_INPUT_ID_PREFIX}${windowId}-${uid}` !== inputId) return null;
+  return windowId;
+};
+
+const auxiliaryUidsConflict = (snapshot, uid) => {
+  const extras = [
+    snapshot?.inputDataUid,
+    snapshot?.inputDataBlockUid,
+    snapshot?.containerDataUid,
+  ];
+  return extras.some((value) => value && value !== uid);
+};
+
+const clearStatus = () => {
+  if (statusTimer) {
+    clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+  document.getElementById(STATUS_ID)?.remove();
+};
+
+const showStatus = (message, generation) => {
+  if (typeof message !== "string" || !message) return;
+  if (!pluginActive || generation !== lifecycleGeneration) return;
+  let status = document.getElementById(STATUS_ID);
+  if (!status) {
+    status = document.createElement("div");
+    status.id = STATUS_ID;
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    const parent = document.body || document.documentElement;
+    if (!parent?.appendChild) return;
+    parent.appendChild(status);
+  }
+  status.textContent = message;
+  if (statusTimer) clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => {
+    statusTimer = null;
+    if (!pluginActive || generation !== lifecycleGeneration) return;
+    status.remove();
+  }, STATUS_VISIBLE_MS);
 };
 
 const getOwnControls = (container) => {
@@ -460,6 +595,7 @@ const removeButton = () => {
   }
   activeBlockContainer = null;
   activeBlockInputId = null;
+  activeTargetSnapshot = null;
 };
 
 const watchHighlight = (container) => {
@@ -478,82 +614,118 @@ const watchHighlight = (container) => {
   });
 };
 
-const extractWindowId = (inputId) => {
-  if (!inputId) return null;
-  const match = inputId.match(WINDOW_ID_PATTERN);
-  return match ? match[1] : null;
+const buildBlockInputId = (windowId, uid) =>
+  windowId && uid ? `${BLOCK_INPUT_ID_PREFIX}${windowId}-${uid}` : null;
+
+const findExactBlockInput = (uid, windowId) => {
+  const exactId = buildBlockInputId(windowId, uid);
+  if (!exactId) return null;
+  return document.getElementById(exactId) || null;
+};
+
+const getFocusedBlockInfo = () => {
+  try {
+    const focused = window.roamAlphaAPI?.ui?.getFocusedBlock?.();
+    if (!focused) return { uid: null, windowId: null };
+    return {
+      uid: focused["block-uid"] || focused.uid || null,
+      windowId: focused["window-id"] || null,
+    };
+  } catch (error) {
+    return { uid: null, windowId: null };
+  }
+};
+
+const isAlreadyFocused = (uid, windowId) => {
+  const focused = getFocusedBlockInfo();
+  if (focused.uid !== uid) return false;
+  if (windowId) return focused.windowId === windowId;
+  return true;
+};
+
+const requestBlockFocus = (uid, windowId, selectionLength) => {
+  const ui = window.roamAlphaAPI?.ui;
+  if (!ui?.setBlockFocusAndSelection) return;
+  const location = { "block-uid": uid };
+  if (windowId) location["window-id"] = windowId;
+  try {
+    const result = ui.setBlockFocusAndSelection({
+      location,
+      selection: { start: selectionLength, end: selectionLength },
+    });
+    if (result && typeof result.then === "function") {
+      result.catch(() => {});
+    }
+  } catch (error) {
+    /* ignore sync focus errors */
+  }
+};
+
+const applyDomFocus = (textarea) => {
+  const selectionLength =
+    typeof textarea.value === "string"
+      ? textarea.value.length
+      : textarea.textContent?.length ?? 0;
+  if (typeof textarea.focus === "function") {
+    textarea.focus();
+  }
+  if (typeof textarea.setSelectionRange === "function") {
+    textarea.setSelectionRange(selectionLength, selectionLength);
+  } else if ("selectionStart" in textarea && "selectionEnd" in textarea) {
+    textarea.selectionStart = selectionLength;
+    textarea.selectionEnd = selectionLength;
+  }
+  return selectionLength;
 };
 
 const focusInsertedBlock = (
   uid,
   windowId,
   lifecycleToken,
+  operationToken,
   attemptsLeft = MAX_FOCUS_ATTEMPTS
 ) => {
   if (!uid || attemptsLeft <= 0 || !isCurrentLifecycle(lifecycleToken)) {
     return;
   }
+  if (operationToken !== latestFocusOperation) return;
+  if (isAlreadyFocused(uid, windowId)) return;
 
-  const textarea =
-    document.querySelector(`${BLOCK_INPUT_SELECTOR}[id$='${uid}']`) ||
-    document.querySelector(`${BLOCK_INPUT_SELECTOR}[data-uid='${uid}']`);
+  const textarea = findExactBlockInput(uid, windowId);
+  const selectionLength = textarea
+    ? typeof textarea.value === "string"
+      ? textarea.value.length
+      : textarea.textContent?.length ?? 0
+    : 0;
 
-  const ui = window.roamAlphaAPI?.ui;
-  const alreadyFocusedUid =
-    ui?.getFocusedBlock?.()?.["block-uid"] ||
-    ui?.getFocusedBlock?.()?.uid ||
-    null;
+  requestBlockFocus(uid, windowId, selectionLength);
 
-  if (alreadyFocusedUid === uid && textarea) {
+  if (textarea) {
+    const runDomFocus = () => {
+      if (!isCurrentLifecycle(lifecycleToken)) return;
+      if (operationToken !== latestFocusOperation) return;
+      applyDomFocus(textarea);
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(runDomFocus);
+    } else {
+      runDomFocus();
+    }
     return;
   }
 
-  if (!textarea) {
-    scheduleFocus(
-      () =>
-        focusInsertedBlock(uid, windowId, lifecycleToken, attemptsLeft - 1),
-      FOCUS_RETRY_DELAY_MS,
-      lifecycleToken
-    );
-    return;
-  }
-
-  requestAnimationFrame(() => {
-    if (!isCurrentLifecycle(lifecycleToken)) return;
-    const selectionLength =
-      typeof textarea.value === "string"
-        ? textarea.value.length
-        : textarea.textContent?.length ?? 0;
-
-    if (typeof textarea.focus === "function") {
-      textarea.focus();
-    }
-    if (typeof textarea.setSelectionRange === "function") {
-      textarea.setSelectionRange(selectionLength, selectionLength);
-    } else if ("selectionStart" in textarea && "selectionEnd" in textarea) {
-      textarea.selectionStart = selectionLength;
-      textarea.selectionEnd = selectionLength;
-    }
-
-    if (ui?.setBlockFocusAndSelection) {
-      const targetWindowId =
-        windowId ||
-        ui.getFocusedBlock?.()?.["window-id"] ||
-        null;
-      const location = { "block-uid": uid };
-      if (targetWindowId) {
-        location["window-id"] = targetWindowId;
-      }
-      try {
-        ui.setBlockFocusAndSelection({
-          location,
-          selection: { start: selectionLength, end: selectionLength },
-        });
-      } catch (error) {
-        /* ignore focus errors */
-      }
-    }
-  });
+  scheduleFocus(
+    () =>
+      focusInsertedBlock(
+        uid,
+        windowId,
+        lifecycleToken,
+        operationToken,
+        attemptsLeft - 1
+      ),
+    FOCUS_RETRY_DELAY_MS,
+    lifecycleToken
+  );
 };
 
 const getNestedUid = (obj) =>
@@ -569,13 +741,55 @@ const pullBlockMetadata = (blockUid) => {
   }
   try {
     return pullFn(
-      "[:block/order :block/string {:block/children [:block/uid]} {:block/_children [:block/uid]} {:block/parents [:block/uid]} {:block/page [:block/uid]}]",
+      "[:block/uid :block/string :block/order :node/title {:block/children [:block/uid]} {:block/_children [:block/uid]} {:block/parents [:block/uid]} {:block/page [:block/uid]}]",
       [":block/uid", blockUid]
     );
   } catch (error) {
     console.error("Native Insert Block: Failed to load block data", error);
     return null;
   }
+};
+
+const getBlockString = (blockData) =>
+  blockData?.[":block/string"] ??
+  blockData?.["block/string"] ??
+  blockData?.string;
+
+const isPageEntity = (blockData) => {
+  const title =
+    blockData?.[":node/title"] ??
+    blockData?.["node/title"] ??
+    blockData?.title;
+  return typeof title === "string";
+};
+
+const isMatchingBlockEntity = (blockData, uid) => {
+  if (!blockData || !uid) return false;
+  if (isPageEntity(blockData)) return false;
+  const pulledUid = getNestedUid(blockData);
+  if (pulledUid !== uid) return false;
+  return typeof getBlockString(blockData) === "string";
+};
+
+const resolveValidatedTarget = (container, snapshot) => {
+  if (!pluginActive) return { error: "stale" };
+  if (!snapshot || snapshot.container !== container) return { error: "stale" };
+  if (!isNodeConnected(container) || !isNodeConnected(snapshot.input)) {
+    return { error: "stale" };
+  }
+  const current = captureTargetSnapshot(container);
+  if (!snapshotsMatch(snapshot, current)) return { error: "stale" };
+
+  const uid = snapshot.blockUid;
+  if (!uid) return { error: "missing" };
+  if (auxiliaryUidsConflict(snapshot, uid)) return { error: "ambiguous" };
+
+  const windowId = parseWindowIdFromInput(snapshot.inputId, uid);
+  if (!windowId) return { error: "missing" };
+
+  const blockData = pullBlockMetadata(uid);
+  if (!isMatchingBlockEntity(blockData, uid)) return { error: "missing" };
+  return { uid, windowId, blockData };
 };
 
 const isEmptyBlock = (blockData) => {
@@ -627,14 +841,14 @@ const resolveOrder = (blockData) => {
 
 const renderButton = (container) => {
   if (!window.React || !window.ReactDOM || !window.roamAlphaAPI) return;
-  const blockInput = container.querySelector(BLOCK_INPUT_SELECTOR);
-  if (!blockInput) return;
+  const snapshot = captureTargetSnapshot(container);
+  if (!snapshot) return;
 
   removeButton();
 
-  const blockUid = blockInput.id.slice(-9);
-  activeBlockInputId = blockInput.id;
-  const windowHint = extractWindowId(blockInput.id);
+  activeTargetSnapshot = snapshot;
+  activeBlockInputId = snapshot.inputId;
+  const renderGeneration = lifecycleGeneration;
   const buttonContainer = document.createElement("div");
   buttonContainer.id = BUTTON_CONTAINER_ID;
   let actionHandledForPress = false;
@@ -647,10 +861,31 @@ const renderButton = (container) => {
     if (!actionMode) return;
     if (actionHandledForPress) return;
     actionHandledForPress = true;
+    if (!pluginActive || renderGeneration !== lifecycleGeneration) return;
+    if (!snapshotsMatch(activeTargetSnapshot, snapshot)) return;
 
-    const focusedWindowId =
-      window.roamAlphaAPI.ui?.getFocusedBlock?.()?.["window-id"] || null;
-    const lifecycleToken = lifecycleGeneration;
+    const lifecycleToken = renderGeneration;
+    const target = resolveValidatedTarget(container, snapshot);
+    if (target.error) {
+      removeButton();
+      showStatus(
+        "Native Insert Block could not identify this block.",
+        renderGeneration
+      );
+      return;
+    }
+
+    const blockUid = target.uid;
+    const windowHint = target.windowId;
+    const blockData = target.blockData;
+    const focusedWindowId = getFocusedBlockInfo().windowId;
+    const ownBullet = getOwnBullet(container);
+    const expandParentAfterInsert = Boolean(
+      actionMode === "child" &&
+        (ownBullet?.classList?.contains?.("rm-bullet--closed") ||
+          container.classList.contains("rm-block--closed"))
+    );
+    const operationToken = ++latestFocusOperation;
 
     removeButton();
 
@@ -659,18 +894,16 @@ const renderButton = (container) => {
         await window.roamAlphaAPI.deleteBlock({ block: { uid: blockUid } });
       } catch (error) {
         console.error("Native Insert Block: Failed to delete block", error);
+        showStatus(
+          "Native Insert Block could not complete that action.",
+          renderGeneration
+        );
       }
-      return;
-    }
-
-    const blockData = pullBlockMetadata(blockUid);
-    if (!blockData) {
       return;
     }
 
     let targetParentUid;
     let targetOrder;
-    let expandParentAfterInsert = false;
 
     if (actionMode === "wrap") {
       // Ctrl + Click: Insert Parent
@@ -680,6 +913,10 @@ const renderButton = (container) => {
 
       if (!currentParentUid || typeof currentOrder !== "number") {
         console.error("Native Insert Block: Could not resolve parent or order for Insert Parent");
+        showStatus(
+          "Native Insert Block could not complete that action.",
+          renderGeneration
+        );
         return;
       }
 
@@ -705,7 +942,8 @@ const renderButton = (container) => {
             focusInsertedBlock(
               newParentUid,
               windowHint || focusedWindowId,
-              lifecycleToken
+              lifecycleToken,
+              operationToken
             ),
           POST_INSERT_FOCUS_DELAY_MS,
           lifecycleToken
@@ -736,6 +974,10 @@ const renderButton = (container) => {
           }
         }
         console.error("Native Insert Block: Failed to insert parent block", error);
+        showStatus(
+          "Native Insert Block could not complete that action.",
+          renderGeneration
+        );
       }
       return;
     }
@@ -745,11 +987,6 @@ const renderButton = (container) => {
       targetParentUid = blockUid;
       const children = blockData[":block/children"] || blockData["block/children"] || [];
       targetOrder = children.length;
-      const bullet = container.querySelector(".rm-bullet");
-      expandParentAfterInsert = Boolean(
-        bullet?.classList?.contains?.("rm-bullet--closed") ||
-        container.classList.contains("rm-block--closed")
-      );
     } else {
       // Normal or Option Click: Need parent and current order
       targetParentUid = resolveParentUid(blockData);
@@ -760,6 +997,10 @@ const renderButton = (container) => {
           "Native Insert Block: Could not resolve parent or order",
           blockUid,
           blockData
+        );
+        showStatus(
+          "Native Insert Block could not complete that action.",
+          renderGeneration
         );
         return;
       }
@@ -796,13 +1037,18 @@ const renderButton = (container) => {
           focusInsertedBlock(
             newUid,
             windowHint || focusedWindowId,
-            lifecycleToken
+            lifecycleToken,
+            operationToken
           ),
         POST_INSERT_FOCUS_DELAY_MS,
         lifecycleToken
       );
     } catch (error) {
       console.error("Native Insert Block: Failed to insert block", error);
+      showStatus(
+        "Native Insert Block could not complete that action.",
+        renderGeneration
+      );
     }
   };
 
@@ -853,13 +1099,25 @@ const handlePointerMove = (e) => {
   }
 
   if (container === activeBlockContainer) {
-    // The control is already positioned for this block. Re-reading children,
-    // version state and computed layout for every pointermove is unnecessary;
-    // pointerdown/focus/keydown/scroll remove the control when the block state
-    // can change, and the next move will render it again with fresh state.
+    if (!isNodeConnected(container)) {
+      removeButton();
+      return;
+    }
+    const current = captureTargetSnapshot(container);
+    if (!current) {
+      removeButton();
+      return;
+    }
+    if (!snapshotsMatch(activeTargetSnapshot, current)) {
+      renderButton(container);
+    }
     return;
   }
 
+  if (!captureTargetSnapshot(container)) {
+    removeButton();
+    return;
+  }
   renderButton(container);
 };
 
@@ -913,8 +1171,10 @@ const mainApp = {
   destroy() {
     pluginActive = false;
     lifecycleGeneration += 1;
+    latestFocusOperation += 1;
     removeButton();
     removeStyles();
+    clearStatus();
     clearFocusTimers();
     document.removeEventListener("pointermove", handlePointerMove, true);
     document.documentElement.removeEventListener(

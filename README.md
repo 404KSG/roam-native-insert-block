@@ -14,15 +14,13 @@ Add, nest, wrap, or remove Roam blocks from one small control beside the active 
 
 Use one modifier at a time. Combined modifiers are ignored to prevent accidental actions.
 
+The control identifies a block from the owning container's native `data-block-uid`, then checks that the input id is `block-input-{windowId}-{that uid}`. If that attribute is missing or contradicts the input id, the action is refused. Failed or uncertain actions show a brief nonblocking status message that does not include graph content. Automated tests use mocked Roam APIs. Live installation results are reported in the update PR.
+
 ## Install
 
-While the extension is awaiting Depot review, install the PR preview with this shorthand:
+Open **Roam Settings → Extensions**, search for **Native Insert Block**, and select **Install**.
 
-```text
-404KSG+roam-native-insert-block+1406
-```
-
-After [Depot PR #1406](https://github.com/Roam-Research/roam-depot/pull/1406) is merged, open **Roam Settings → Extensions**, search for **Native Insert Block**, and select **Install**.
+To try a preview of the version in the active update PR, use the shorthand shown in that PR.
 
 For manual use, run `npm run build`, paste the generated `roamjs.js` into a `{{[[roam/js]]}}` code block, and refresh Roam. Use only one installation method at a time.
 
