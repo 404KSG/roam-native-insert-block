@@ -2,6 +2,10 @@
 
 Add, nest, wrap, or remove Roam blocks from one small control beside the active block. The button stays aligned with your current text row, including in Document Mode.
 
+## v0.9.4
+
+When Roam hides or omits a parent’s collapse control, the plus now aligns with that block’s own Bullet instead of reserving space for the hidden control. Visible collapse controls retain their existing clearance.
+
 ![Native Insert Block in Roam Research](https://github.com/user-attachments/assets/3e0c261b-1383-439b-9f41-f5d69b38be8d)
 
 ## Controls
@@ -36,6 +40,8 @@ npm run build
 ```
 
 Edit `src/action-mode.js` for modifier behavior and `src/index.js` for the Roam runtime. The build generates `extension.js` for the Depot and `roamjs.js` for manual use.
+
+For a dependency-free synthetic browser layout fixture (no graph data), run `node tests/layout-fixture-server.js` and open `http://127.0.0.1:4173`.
 
 ## Credits
 

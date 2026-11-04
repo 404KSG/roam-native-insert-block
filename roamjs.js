@@ -264,6 +264,42 @@ const getOwnCaretAnchor = (container) => {
     : null;
 };
 
+const isVisuallyHidden = (element, container) => {
+  let current = element;
+  while (current) {
+    if (
+      current.hidden ||
+      current.getAttribute?.("aria-hidden") === "true" ||
+      current.classList?.contains?.("rm-caret-hidden")
+    ) {
+      return true;
+    }
+
+    try {
+      const style = window.getComputedStyle?.(current);
+      if (
+        style?.display === "none" ||
+        style?.visibility === "hidden" ||
+        style?.visibility === "collapse" ||
+        Number.parseFloat(style?.opacity) === 0
+      ) {
+        return true;
+      }
+    } catch (error) {
+      return true;
+    }
+
+    if (current === container) return false;
+    current = current.parentElement || current.parentNode || null;
+  }
+  return false;
+};
+
+const hasVisibleOwnCaret = (container) => {
+  const caret = getOwnCaretAnchor(container);
+  return Boolean(caret && !isVisuallyHidden(caret, container));
+};
+
 const getBulletAnchoredTop = (container, button) => {
   const bullet = getOwnBulletAnchor(container);
   if (!bullet) return { top: null, retry: false };
@@ -314,15 +350,7 @@ const getCaretAnchoredTop = (container, button) => {
   const caret = getOwnCaretAnchor(container);
   if (!caret || !button) return { top: null, retry: false };
 
-  try {
-    const computedStyle = window.getComputedStyle?.(caret);
-    if (
-      computedStyle?.display === "none" ||
-      computedStyle?.visibility === "hidden"
-    ) {
-      return { top: null, retry: false };
-    }
-  } catch (e) {
+  if (isVisuallyHidden(caret, container)) {
     return { top: null, retry: false };
   }
 
@@ -420,13 +448,17 @@ const updateButtonState = (container, defer = true) => {
   const versionState = getVersionState(container);
   const hasChildren = determineChildrenState(container);
   const documentMode = isDocumentMode(container);
+  const hasVisibleCaret =
+    !documentMode && hasChildren && hasVisibleOwnCaret(container);
   const shouldOffset =
-    !documentMode && versionState.isVersionBlock && versionState.isCollapsed;
-  const treatAsChildren =
-    !documentMode &&
-    (hasChildren ||
-      (versionState.isVersionBlock && versionState.isCollapsed));
-  const shouldUseCaretAnchor = !documentMode && hasChildren;
+    hasVisibleCaret &&
+    versionState.isVersionBlock &&
+    versionState.isCollapsed;
+  // A parent can retain children while Roam hides or omits its fold control.
+  // In that state the plus belongs on its own Bullet row, not below a control
+  // the user cannot see.
+  const treatAsChildren = hasVisibleCaret;
+  const shouldUseCaretAnchor = hasVisibleCaret;
   button.classList.toggle(DOCUMENT_MODE_CLASS, documentMode);
   button.classList.toggle(NO_CHILDREN_CLASS, !treatAsChildren);
   adjustButtonPosition(
@@ -434,7 +466,7 @@ const updateButtonState = (container, defer = true) => {
     button,
     versionState,
     shouldOffset,
-    !hasChildren,
+    !shouldUseCaretAnchor,
     shouldUseCaretAnchor,
     defer
   );
@@ -610,17 +642,25 @@ const removeButton = () => {
 
 const watchHighlight = (container) => {
   stopHighlightObserver();
-  activeHighlightObserver = new MutationObserver(() => {
-    if (
-      activeBlockContainer === container &&
-      container.classList.contains(ROAM_HIGHLIGHT_CLASS)
-    ) {
+  activeHighlightObserver = new MutationObserver((mutations) => {
+    if (activeBlockContainer !== container) return;
+    if (container.classList.contains(ROAM_HIGHLIGHT_CLASS)) {
       removeButton();
+      return;
     }
+
+    const button = document.getElementById(BUTTON_CONTAINER_ID);
+    const hasExternalLayoutChange = mutations.some((mutation) => {
+      const target = mutation.target;
+      return target !== button && !button?.contains?.(target);
+    });
+    if (hasExternalLayoutChange) updateButtonState(container);
   });
   activeHighlightObserver.observe(container, {
     attributes: true,
-    attributeFilter: ["class"],
+    attributeFilter: ["class", "style", "hidden", "aria-hidden"],
+    childList: true,
+    subtree: true,
   });
 };
 

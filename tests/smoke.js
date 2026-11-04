@@ -99,6 +99,10 @@ const createContainer = ({
   buttonRect = createRect(0, 24),
   bulletVisible = true,
   caretVisible = true,
+  caretOpacity = "1",
+  caretClass = [],
+  caretAncestorVisible = true,
+  includeCaret = true,
   includeBullet = true,
   nestedBulletRect = null,
   nestedCaretRect = null,
@@ -135,11 +139,16 @@ const createContainer = ({
   };
   const nestedContainer = {};
 
-  const visualCaret = {
-    classList: new ClassList(collapsed ? ["rm-caret-closed"] : []),
+  const visualCaret = includeCaret
+    ? {
+    classList: new ClassList([
+      ...(collapsed ? ["rm-caret-closed"] : []),
+      ...caretClass,
+    ]),
     computedStyle: {
       display: caretVisible ? "block" : "none",
       visibility: caretVisible ? "visible" : "hidden",
+      opacity: caretOpacity,
     },
     closest(selector) {
       return selector === ".roam-block-container" ? container : null;
@@ -148,8 +157,14 @@ const createContainer = ({
       geometryReads.caret += 1;
       return { ...caretRect };
     },
-  };
+  }
+    : null;
   const controls = {
+    computedStyle: {
+      display: caretAncestorVisible ? "block" : "none",
+      visibility: caretAncestorVisible ? "visible" : "hidden",
+      opacity: "1",
+    },
     closest(selector) {
       return selector === ".roam-block-container" ? container : null;
     },
@@ -160,6 +175,7 @@ const createContainer = ({
       return null;
     },
   };
+  if (visualCaret) visualCaret.parentElement = controls;
 
   const nestedVisualCaret = nestedCaretRect
     ? {
@@ -224,7 +240,10 @@ const createContainer = ({
   container = {
     children,
     nativeBullet: bullet,
+    nativeCaret: visualCaret,
+    nativeControls: controls,
     classList: new ClassList(),
+    computedStyle: { display: "block", visibility: "visible", opacity: "1" },
     attributes: { "data-block-uid": "123456789" },
     getAttribute(name) {
       return this.attributes[name] ?? null;
@@ -274,7 +293,13 @@ const createContainer = ({
     getGeometryReads() {
       return { ...geometryReads };
     },
+    setCaretVisibility(visible) {
+      if (!visualCaret) return;
+      visualCaret.computedStyle.display = visible ? "block" : "none";
+      visualCaret.computedStyle.visibility = visible ? "visible" : "hidden";
+    },
   };
+  controls.parentElement = container;
   return container;
 };
 
@@ -299,9 +324,22 @@ const windowMock = {
   }),
 };
 
+const mutationObservers = new Set();
 class MutationObserverMock {
-  observe() {}
-  disconnect() {}
+  constructor(callback) {
+    this.callback = callback;
+  }
+  observe(target, options) {
+    this.target = target;
+    this.options = options;
+    mutationObservers.add(this);
+  }
+  disconnect() {
+    mutationObservers.delete(this);
+  }
+  trigger(mutations) {
+    this.callback(mutations);
+  }
 }
 
 const moduleSource = fs
@@ -473,6 +511,89 @@ for (const parentCase of parentCaretCases) {
     `${parentCase.name} must measure only its own caret, never its Bullet`
   );
 }
+
+const focusedParentWithoutCaret = createContainer({
+  hasChildren: true,
+  caretVisible: false,
+  containerRect: createRect(100.5, 60),
+  bulletRect: createRect(121.625, 11.25),
+  buttonRect: createRect(118.5, 24),
+});
+moveOver(focusedParentWithoutCaret);
+assert.strictEqual(
+  buttonElement.classList.contains("native-insert-block-no-children"),
+  true,
+  "a focused parent without a visible collapse control must use the inline Bullet row"
+);
+assert.strictEqual(
+  buttonElement.style.top,
+  "14.75px",
+  "children alone must not push the plus below an absent collapse control"
+);
+
+for (const hiddenCaretCase of [
+  { name: "absent", includeCaret: false },
+  { name: "caret-hidden class", caretClass: ["rm-caret-hidden"] },
+  { name: "transparent caret", caretOpacity: "0" },
+  { name: "hidden controls ancestor", caretAncestorVisible: false },
+]) {
+  const hiddenCaretParent = createContainer({
+    hasChildren: true,
+    containerRect: createRect(100.5, 60),
+    bulletRect: createRect(121.625, 11.25),
+    buttonRect: createRect(118.5, 24),
+    ...hiddenCaretCase,
+  });
+  moveOver(hiddenCaretParent);
+  assert.strictEqual(
+    buttonElement.classList.contains("native-insert-block-no-children"),
+    true,
+    `${hiddenCaretCase.name} must use the inline Bullet row`
+  );
+  assert.strictEqual(
+    buttonElement.style.top,
+    "14.75px",
+    `${hiddenCaretCase.name} must anchor to its own Bullet`
+  );
+}
+
+const visibilityTransition = createContainer({
+  hasChildren: true,
+  caretVisible: false,
+  containerRect: createRect(100.5, 60),
+  bulletRect: createRect(121.625, 11.25),
+  buttonRect: createRect(118.5, 24),
+});
+moveOver(visibilityTransition);
+assert.ok(
+  buttonElement.classList.contains("native-insert-block-no-children"),
+  "a hidden caret starts on the inline Bullet row"
+);
+visibilityTransition.setCaretVisibility(true);
+for (const observer of mutationObservers) {
+  observer.trigger([{ target: visibilityTransition.nativeCaret }]);
+}
+flushAnimationFrames();
+assert.strictEqual(
+  buttonElement.classList.contains("native-insert-block-no-children"),
+  false,
+  "a same-container caret reveal must restore caret clearance"
+);
+visibilityTransition.setCaretVisibility(false);
+for (const observer of mutationObservers) {
+  observer.trigger([{ target: visibilityTransition.nativeCaret }]);
+}
+flushAnimationFrames();
+assert.strictEqual(
+  buttonElement.classList.contains("native-insert-block-no-children"),
+  true,
+  "a same-container caret hide must restore the inline Bullet row"
+);
+assert.strictEqual(
+  buttonElement.style.top,
+  "14.75px",
+  "a same-container caret hide must not retain stale caret placement"
+);
 
 const parentWithNestedCaret = createContainer({
   hasChildren: true,
