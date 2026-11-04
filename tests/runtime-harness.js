@@ -55,6 +55,10 @@ const createRuntime = ({
   setBlockFocusAndSelection,
   unmountAvailable = true,
   extraInputs = [],
+  scope = "ordinary",
+  ownCaretClass = [],
+  documentMode = false,
+  versionBlock = false,
 } = {}) => {
   const listeners = new Map();
   const calls = {
@@ -264,9 +268,18 @@ const createRuntime = ({
     },
   };
 
+  const mutationObservers = new Set();
   class MutationObserverMock {
-    observe() {}
-    disconnect() {}
+    constructor(callback) {
+      this.callback = callback;
+    }
+    observe(target) {
+      mutationObservers.add(this);
+      this.target = target;
+    }
+    disconnect() {
+      mutationObservers.delete(this);
+    }
   }
 
   const moduleSource = fs
@@ -308,6 +321,10 @@ const createRuntime = ({
     collapsed: isCollapsed = false,
     connected: isConnected = true,
     inputTagName: tagName = "DIV",
+    scope: containerScope = scope,
+    ownCaretClass: caretClasses = ownCaretClass,
+    documentMode: isDocumentMode = documentMode,
+    versionBlock: isVersionBlock = versionBlock,
   }) => {
     let container;
     const inputAttributes = {};
@@ -333,6 +350,22 @@ const createRuntime = ({
             return selector === ".roam-block-container" ? container : null;
           },
         };
+    const ownCaret = caretClasses === null ? null : {
+      classList: new ClassList(caretClasses),
+      closest(selector) {
+        return selector === ".roam-block-container" ? container : null;
+      },
+    };
+    const controls = {
+      closest(selector) {
+        return selector === ".roam-block-container" ? container : null;
+      },
+      querySelector(selector) {
+        return selector === ".rm-caret" || selector === ".block-expand"
+          ? ownCaret
+          : null;
+      },
+    };
     const bullet = {
       classList: new ClassList(isCollapsed ? ["rm-bullet--closed"] : []),
       closest(selector) {
@@ -361,8 +394,36 @@ const createRuntime = ({
     if (nativeBlockUid) containerAttributes["data-block-uid"] = nativeBlockUid;
     if (blockContainerUid) containerAttributes["data-uid"] = blockContainerUid;
 
+    let currentScope = containerScope;
+    const mainBody = { classList: new ClassList(["roam-body-main"]) };
+    const wrapper = {
+      classList: new ClassList(
+        currentScope === "main-root" || currentScope === "sidebar-root"
+          ? ["rm-zoom-block-wrapper"]
+          : ["rm-block-children"]
+      ),
+      parentElement: mainBody,
+      closest(selector) {
+        if (selector === ".roam-body-main") {
+          return currentScope === "main-root" ? mainBody : null;
+        }
+        if (selector === ".roam-block-container") {
+          return currentScope === "descendant" ? {} : null;
+        }
+        if (currentScope === "sidebar-root") {
+          return ["#right-sidebar", ".rm-sidebar-window", ".rm-sidebar-outline"].includes(selector)
+            ? {} : null;
+        }
+        if (currentScope === "reference") {
+          return [".rm-inline-reference", ".rm-embed-container", ".rm-query", ".rm-query-builder", ".rm-reference"].includes(selector)
+            ? {} : null;
+        }
+        return null;
+      },
+    };
     container = {
       classList: new ClassList(["roam-block-container"]),
+      parentElement: currentScope === "unknown" ? null : wrapper,
       isConnected: isConnected,
       attributes: containerAttributes,
       children: [],
@@ -370,6 +431,8 @@ const createRuntime = ({
         return this.attributes[name] ?? null;
       },
       querySelector(selector) {
+        if (selector === ".rm-version-choice-wrapper") return isVersionBlock ? {} : null;
+        if (selector === ".version-bullet") return null;
         return this.querySelectorAll(selector)[0] || null;
       },
       querySelectorAll(selector) {
@@ -381,6 +444,7 @@ const createRuntime = ({
           }
           return inputs;
         }
+        if (selector === ".rm-block__controls") return [controls];
         if (selector === ".rm-bullet") {
           const bullets = [bullet];
           for (const child of nestedContainers) {
@@ -394,8 +458,11 @@ const createRuntime = ({
         }
         return [];
       },
-      closest() {
-        return null;
+      closest(selector) {
+        if (selector === ".rm-block--document, .rm-block__children--document") {
+          return isDocumentMode ? {} : null;
+        }
+        return wrapper.closest(selector);
       },
       appendChild(element) {
         this.children.push(element);
@@ -408,6 +475,19 @@ const createRuntime = ({
         return nestedContainers.some((child) => child.contains(node));
       },
       getBoundingClientRect: () => ({ top: 0, height: 24 }),
+      nativeCaret: ownCaret,
+      setScope(nextScope) {
+        currentScope = nextScope;
+        wrapper.classList = new ClassList(
+          currentScope === "main-root" || currentScope === "sidebar-root"
+            ? ["rm-zoom-block-wrapper"]
+            : ["rm-block-children"]
+        );
+        this.parentElement = currentScope === "unknown" ? null : wrapper;
+      },
+      setConnected(connected) {
+        this.isConnected = connected;
+      },
     };
 
     return container;
@@ -424,6 +504,10 @@ const createRuntime = ({
     collapsed,
     connected,
     inputTagName,
+    scope,
+    ownCaretClass,
+    documentMode,
+    versionBlock,
   });
 
   for (const extra of extraInputs) {
@@ -486,6 +570,7 @@ const createRuntime = ({
     api,
     blockGraph,
     buttonExists: () => Boolean(buttonContainer),
+    buttonClassContains: (className) => Boolean(buttonContainer?.classList?.contains(className)),
     calls,
     container,
     document: documentMock,
@@ -495,6 +580,10 @@ const createRuntime = ({
     flushTimers,
     listeners,
     pendingTimerCount: () => pendingTimers.size,
+    triggerMutations: () => {
+      for (const observer of [...mutationObservers]) observer.callback([]);
+    },
+    activeObserverCount: () => mutationObservers.size,
     pointerMove,
     registerInput,
     createContainer: (opts = {}) =>
@@ -509,6 +598,10 @@ const createRuntime = ({
         collapsed: opts.collapsed,
         connected: opts.connected !== false,
         inputTagName: opts.inputTagName,
+        scope: opts.scope ?? scope,
+        ownCaretClass: opts.ownCaretClass ?? ownCaretClass,
+        documentMode: opts.documentMode ?? documentMode,
+        versionBlock: opts.versionBlock ?? versionBlock,
       }),
     renderForContainer,
     statusElement: () => statusElement,

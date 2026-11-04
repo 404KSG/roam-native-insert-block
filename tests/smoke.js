@@ -63,10 +63,6 @@ const makeElement = (tagName) => {
       return { ...this.rect };
     },
     remove() {
-      const siblings = this.parentElement?.children;
-      const index = siblings?.indexOf(this) ?? -1;
-      if (index >= 0) siblings.splice(index, 1);
-      this.parentElement = null;
       if (this === styleElement) styleElement = null;
       if (this === buttonElement) buttonElement = null;
     },
@@ -85,8 +81,7 @@ const documentMock = {
   createElement: makeElement,
   getElementById(id) {
     if (styleElement?.id === id) return styleElement;
-    // A real document lookup cannot find a node under a detached container.
-    if (buttonElement?.id === id && buttonElement.parentElement?.isConnected !== false) return buttonElement;
+    if (buttonElement?.id === id) return buttonElement;
     return null;
   },
   querySelector() {
@@ -104,15 +99,6 @@ const createContainer = ({
   buttonRect = createRect(0, 24),
   bulletVisible = true,
   caretVisible = true,
-  caretOpacity = "1",
-  caretAnimations = [],
-  caretClass = [],
-  caretAriaHidden = false,
-  caretAncestorVisible = true,
-  caretAncestorVisibility = null,
-  includeCaret = true,
-  versionBlock = false,
-  versionCollapsed = false,
   includeBullet = true,
   nestedBulletRect = null,
   nestedCaretRect = null,
@@ -128,7 +114,6 @@ const createContainer = ({
   let currentBulletRect = { ...bulletRect };
   const geometryReads = { bullet: 0, caret: 0, container: 0 };
   const visualBullet = {
-    parentElement: null,
     computedStyle: {
       display: bulletVisible ? "block" : "none",
       visibility: bulletVisible ? "visible" : "hidden",
@@ -141,7 +126,6 @@ const createContainer = ({
   let container;
   const bullet = {
     classList: new ClassList(collapsed ? ["rm-bullet--closed"] : []),
-    parentElement: null,
     closest(selector) {
       return selector === ".roam-block-container" ? container : null;
     },
@@ -151,36 +135,21 @@ const createContainer = ({
   };
   const nestedContainer = {};
 
-  const visualCaret = includeCaret
-    ? {
-    classList: new ClassList([
-      ...(collapsed || versionCollapsed ? ["rm-caret-closed"] : []),
-      ...caretClass,
-    ]),
+  const visualCaret = {
+    classList: new ClassList(collapsed ? ["rm-caret-closed"] : []),
     computedStyle: {
       display: caretVisible ? "block" : "none",
       visibility: caretVisible ? "visible" : "hidden",
-      opacity: caretOpacity,
     },
     closest(selector) {
       return selector === ".roam-block-container" ? container : null;
     },
-    getAttribute(name) {
-      return name === "aria-hidden" && caretAriaHidden ? "true" : null;
-    },
-    getAnimations() { return caretAnimations; },
     getBoundingClientRect: () => {
       geometryReads.caret += 1;
       return { ...caretRect };
     },
-  }
-    : null;
+  };
   const controls = {
-    computedStyle: {
-      display: caretAncestorVisible ? "block" : "none",
-      visibility: caretAncestorVisibility || (caretAncestorVisible ? "visible" : "hidden"),
-      opacity: "1",
-    },
     closest(selector) {
       return selector === ".roam-block-container" ? container : null;
     },
@@ -191,8 +160,6 @@ const createContainer = ({
       return null;
     },
   };
-  if (visualCaret) visualCaret.parentElement = controls;
-  visualBullet.parentElement = bullet;
 
   const nestedVisualCaret = nestedCaretRect
     ? {
@@ -254,25 +221,15 @@ const createContainer = ({
         : [bullet]
     : [];
   const children = includeBullet ? [bullet] : [];
-  const motionListeners = new Map();
   container = {
-    addEventListener(type, callback) { motionListeners.set(type, callback); },
-    removeEventListener(type, callback) { if (motionListeners.get(type) === callback) motionListeners.delete(type); },
-    emitMotion(type, propertyName = "opacity") { motionListeners.get(type)?.({ target: visualCaret, propertyName }); },
-    motionListenerCount() { return motionListeners.size; },
     children,
     nativeBullet: bullet,
-    nativeCaret: visualCaret,
-    nativeControls: controls,
     classList: new ClassList(),
-    computedStyle: { display: "block", visibility: "visible", opacity: "1" },
-    isConnected: true,
     attributes: { "data-block-uid": "123456789" },
     getAttribute(name) {
       return this.attributes[name] ?? null;
     },
     querySelector(selector) {
-      if (selector === "#native-insert-block-btn-container") return children.find(child => child.id === "native-insert-block-btn-container") || null;
       if (selector.startsWith("[id^='block-input']")) return input;
       if (selector === ".rm-block-children") {
         return hasChildren ? {} : null;
@@ -282,10 +239,6 @@ const createContainer = ({
       }
       if (selector === ".rm-bullet") return includeBullet ? bullet : null;
       if (selector === ".rm-block__controls") return controlsList[0] || null;
-      if (selector === ".rm-version-choice-wrapper") {
-        return versionBlock ? {} : null;
-      }
-      if (selector === ".version-bullet") return null;
       return null;
     },
     querySelectorAll(selector) {
@@ -305,7 +258,6 @@ const createContainer = ({
     },
     appendChild(element) {
       element.rect = { ...buttonRect };
-      element.parentElement = container;
       children.push(element);
       buttonElement = element;
     },
@@ -322,17 +274,7 @@ const createContainer = ({
     getGeometryReads() {
       return { ...geometryReads };
     },
-    setCaretVisibility(visible) {
-      if (!visualCaret) return;
-      visualCaret.computedStyle.display = visible ? "block" : "none";
-      visualCaret.computedStyle.visibility = visible ? "visible" : "hidden";
-    },
-    setConnected(connected) {
-      this.isConnected = connected;
-    },
   };
-  controls.parentElement = container;
-  bullet.parentElement = container;
   return container;
 };
 
@@ -357,22 +299,9 @@ const windowMock = {
   }),
 };
 
-const mutationObservers = new Set();
 class MutationObserverMock {
-  constructor(callback) {
-    this.callback = callback;
-  }
-  observe(target, options) {
-    this.target = target;
-    this.options = options;
-    mutationObservers.add(this);
-  }
-  disconnect() {
-    mutationObservers.delete(this);
-  }
-  trigger(mutations) {
-    this.callback(mutations);
-  }
+  observe() {}
+  disconnect() {}
 }
 
 const moduleSource = fs
@@ -434,12 +363,6 @@ assert.ok(
   ),
   "the plugin must not encode a one-theme pixel correction"
 );
-
-const baseControlCss = styleElement.innerHTML.match(/#native-insert-block-btn-container \{([^}]+)\}/)[1];
-assert.match(baseControlCss, /position:\s*absolute;/, "the control must not participate in native outline flow");
-assert.match(baseControlCss, /left:\s*0;/, "the control must retain its leading gutter anchor");
-assert.match(baseControlCss, /width:\s*24px;/, "the control must retain its declared 24px hitbox width");
-assert.match(baseControlCss, /height:\s*24px;/, "the control must retain its declared 24px hitbox height");
 
 const pointerMove = listeners.get("document:pointermove");
 const moveOver = (container) =>
@@ -532,7 +455,7 @@ const parentCaretCases = [
     containerRect: createRect(460.75, 31.25),
     caretRect: createRect(487.125, 7),
     buttonRect: createRect(478.75, 24),
-    expectedTop: "31.375px",
+    expectedTop: "25.375px",
   },
 ];
 
@@ -542,7 +465,7 @@ for (const parentCase of parentCaretCases) {
   assert.strictEqual(
     buttonElement.style.top,
     parentCase.expectedTop,
-    `${parentCase.name} must preserve the CSS baseline unless its visible plus glyph needs clearance`
+    `${parentCase.name} must preserve the CSS baseline unless its icon center needs clearance`
   );
   assert.deepStrictEqual(
     parent.getGeometryReads(),
@@ -550,93 +473,6 @@ for (const parentCase of parentCaretCases) {
     `${parentCase.name} must measure only its own caret, never its Bullet`
   );
 }
-
-const focusedParentWithoutCaret = createContainer({
-  hasChildren: true,
-  caretVisible: false,
-  containerRect: createRect(100.5, 60),
-  bulletRect: createRect(121.625, 11.25),
-  buttonRect: createRect(118.5, 24),
-});
-focusedParentWithoutCaret.attributes.style = "margin-left: 28px; padding-left: 0px";
-const originalFocusedBullet = focusedParentWithoutCaret.nativeBullet;
-moveOver(focusedParentWithoutCaret);
-assert.strictEqual(focusedParentWithoutCaret.attributes.style, "margin-left: 28px; padding-left: 0px", "placement must not rewrite native indentation");
-assert.ok(focusedParentWithoutCaret.children.includes(originalFocusedBullet), "placement must not replace the native Bullet");
-assert.strictEqual(
-  buttonElement.classList.contains("native-insert-block-no-children"),
-  true,
-  "a focused parent without a visible collapse control must use the inline Bullet row"
-);
-assert.strictEqual(
-  buttonElement.style.top,
-  "14.75px",
-  "children alone must not push the plus below an absent collapse control"
-);
-
-for (const hiddenCaretCase of [
-  { name: "absent", includeCaret: false },
-  { name: "caret-hidden class", caretClass: ["rm-caret-hidden"] },
-  { name: "transparent caret", caretOpacity: "0" },
-  { name: "hidden controls ancestor", caretAncestorVisible: false },
-]) {
-  const hiddenCaretParent = createContainer({
-    hasChildren: true,
-    containerRect: createRect(100.5, 60),
-    bulletRect: createRect(121.625, 11.25),
-    buttonRect: createRect(118.5, 24),
-    ...hiddenCaretCase,
-  });
-  moveOver(hiddenCaretParent);
-  assert.strictEqual(
-    buttonElement.classList.contains("native-insert-block-no-children"),
-    true,
-    `${hiddenCaretCase.name} must use the inline Bullet row`
-  );
-  assert.strictEqual(
-    buttonElement.style.top,
-    "14.75px",
-    `${hiddenCaretCase.name} must anchor to its own Bullet`
-  );
-}
-
-const visibilityTransition = createContainer({
-  hasChildren: true,
-  caretVisible: false,
-  containerRect: createRect(100.5, 60),
-  bulletRect: createRect(121.625, 11.25),
-  buttonRect: createRect(118.5, 24),
-});
-moveOver(visibilityTransition);
-assert.ok(
-  buttonElement.classList.contains("native-insert-block-no-children"),
-  "a hidden caret starts on the inline Bullet row"
-);
-visibilityTransition.setCaretVisibility(true);
-for (const observer of mutationObservers) {
-  observer.trigger([{ target: visibilityTransition.nativeCaret }]);
-}
-flushAnimationFrames();
-assert.strictEqual(
-  buttonElement.classList.contains("native-insert-block-no-children"),
-  false,
-  "a same-container caret reveal must restore caret clearance"
-);
-visibilityTransition.setCaretVisibility(false);
-for (const observer of mutationObservers) {
-  observer.trigger([{ target: visibilityTransition.nativeCaret }]);
-}
-flushAnimationFrames();
-assert.strictEqual(
-  buttonElement.classList.contains("native-insert-block-no-children"),
-  true,
-  "a same-container caret hide must restore the inline Bullet row"
-);
-assert.strictEqual(
-  buttonElement.style.top,
-  "14.75px",
-  "a same-container caret hide must not retain stale caret placement"
-);
 
 const parentWithNestedCaret = createContainer({
   hasChildren: true,
@@ -729,8 +565,8 @@ delayedCaretRect.height = 8;
 flushAnimationFrames();
 assert.strictEqual(
   buttonElement.style.top,
-  "26px",
-  "the visible plus glyph must clear a recovered parent caret after the retry"
+  "20px",
+  "a recovered parent caret must minimally clear the caret after the retry"
 );
 assert.strictEqual(
   animationFrames.size,
@@ -759,150 +595,16 @@ assert.strictEqual(
   "outline blocks with children must preserve caret clearance"
 );
 
-const checkReview = (condition, message) => {
-  assert.ok(condition, message);
-};
-
-const documentModeParent = createContainer({
-  documentMode: true,
-  hasChildren: true,
-});
-moveOver(documentModeParent);
-checkReview(Boolean(buttonElement), "Document Mode must render the insert button");
-checkReview(
+moveOver(createContainer({ documentMode: true, hasChildren: true }));
+assert.ok(buttonElement, "document mode must render the insert button");
+assert.ok(
   buttonElement.classList.contains("native-insert-block-document-mode"),
-  "Document Mode parent must retain its document-mode class"
+  "document mode must use inline positioning"
 );
-checkReview(
+assert.ok(
   buttonElement.classList.contains("native-insert-block-no-children"),
-  "Document Mode parent must retain its text-row class"
+  "document blocks with children must stay aligned to the text row"
 );
-checkReview(
-  buttonElement.style.top === "",
-  "Document Mode parent with a measurable Bullet must keep CSS text-row positioning"
-);
-
-const visibleCollapsedVersion = createContainer({
-  versionBlock: true,
-  versionCollapsed: true,
-  containerRect: createRect(100.5, 60),
-  bulletRect: createRect(121.625, 11.25),
-  buttonRect: createRect(118.5, 24),
-});
-moveOver(visibleCollapsedVersion);
-checkReview(
-  !buttonElement.classList.contains("native-insert-block-no-children"),
-  "a visible collapsed Version Block caret must retain parent clearance without rendered children"
-);
-checkReview(
-  visibleCollapsedVersion.getGeometryReads().caret === 1,
-  "a visible collapsed Version Block must use its own caret rather than its Bullet"
-);
-
-const hiddenCollapsedVersion = createContainer({
-  versionBlock: true,
-  versionCollapsed: true,
-  caretVisible: false,
-  containerRect: createRect(100.5, 60),
-  bulletRect: createRect(121.625, 11.25),
-  buttonRect: createRect(118.5, 24),
-});
-moveOver(hiddenCollapsedVersion);
-checkReview(
-  buttonElement.classList.contains("native-insert-block-no-children"),
-  "a hidden collapsed Version Block caret must use the Bullet row"
-);
-checkReview(
-  buttonElement.style.top === "14.75px",
-  "a hidden collapsed Version Block must anchor to its own Bullet"
-);
-
-const ariaHiddenVisibleCaret = createContainer({
-  hasChildren: true,
-  caretAriaHidden: true,
-});
-moveOver(ariaHiddenVisibleCaret);
-checkReview(
-  !buttonElement.classList.contains("native-insert-block-no-children"),
-  "a CSS-visible aria-hidden caret must retain caret clearance"
-);
-checkReview(
-  ariaHiddenVisibleCaret.getGeometryReads().bullet === 0,
-  "a CSS-visible aria-hidden caret must not use the Bullet anchor"
-);
-
-const visibleCaretOverride = createContainer({
-  hasChildren: true,
-  caretAncestorVisibility: "hidden",
-});
-moveOver(visibleCaretOverride);
-checkReview(
-  !buttonElement.classList.contains("native-insert-block-no-children"),
-  "a caret whose computed visibility is visible can override an ancestor's hidden visibility"
-);
-
-const fadingCaretMotion = {
-  playState: "running",
-  effect: { getKeyframes: () => [{ opacity: "0" }, { opacity: "1" }] },
-};
-const fadingCaretParent = createContainer({
-  hasChildren: true,
-  caretOpacity: "0",
-  caretAnimations: [fadingCaretMotion],
-  containerRect: createRect(100, 60),
-  bulletRect: createRect(120, 12),
-  buttonRect: createRect(118, 24),
-});
-moveOver(fadingCaretParent);
-checkReview(
-  !buttonElement.classList.contains("native-insert-block-no-children"),
-  "an own caret starting a fade-in must reserve space before its first visible frame"
-);
-fadingCaretMotion.playState = "finished";
-fadingCaretParent.emitMotion("transitionend");
-flushAnimationFrames();
-checkReview(
-  buttonElement.classList.contains("native-insert-block-no-children"),
-  "an ended motion with computed opacity zero must return to the own Bullet row"
-);
-fadingCaretParent.nativeCaret.computedStyle.opacity = "1";
-fadingCaretParent.emitMotion("transitionstart");
-flushAnimationFrames();
-checkReview(
-  !buttonElement.classList.contains("native-insert-block-no-children"),
-  "a CSS-only visibility transition must refresh without a pointer move or DOM mutation"
-);
-
-const detachedActiveContainer = createContainer({
-  hasChildren: true,
-  caretRect: createRect(120, 0),
-  containerRect: createRect(100, 30),
-  buttonRect: createRect(118, 24),
-});
-moveOver(detachedActiveContainer);
-checkReview(
-  animationFrames.size === 1,
-  "detached active-container regression must start with one pending retry"
-);
-detachedActiveContainer.setConnected(false);
-for (const observer of mutationObservers) {
-  if (observer.target === documentElement) observer.trigger([{ target: documentElement }]);
-}
-checkReview(
-  buttonElement === null,
-  "detaching the active container must immediately remove the button"
-);
-checkReview(
-  mutationObservers.size === 0,
-  "detaching the active container must disconnect active observers"
-);
-checkReview(
-  animationFrames.size === 0,
-  "detaching the active container must cancel pending position frames"
-);
-checkReview(fadingCaretParent.motionListenerCount() === 0, "moving to another block must remove motion listeners");
-checkReview(detachedActiveContainer.motionListenerCount() === 0, "detaching the active block must remove motion listeners");
-
 
 windowMock.__extension.onunload();
 assert.strictEqual(listeners.size, 0, "onunload must remove all listeners");

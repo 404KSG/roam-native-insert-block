@@ -12,9 +12,18 @@ const ROAM_HIGHLIGHT_CLASS = "rm-block-highlight";
 const DOCUMENT_MODE_SELECTOR =
   ".rm-block--document, .rm-block__children--document";
 const DEFAULT_BUTTON_SIZE = 24;
-const DEFAULT_ICON_SIZE = 12;
-const CARET_ICON_GAP_PX = 4;
+const CARET_BUTTON_GAP_PX = 4;
 const STATUS_VISIBLE_MS = 2500;
+const MAIN_ROOT_EXCLUDED_CONTEXTS = [
+  "#right-sidebar",
+  ".rm-sidebar-window",
+  ".rm-sidebar-outline",
+  ".rm-inline-reference",
+  ".rm-embed-container",
+  ".rm-query",
+  ".rm-query-builder",
+  ".rm-reference",
+];
 
 const MAX_FOCUS_ATTEMPTS = 20;
 const FOCUS_RETRY_DELAY_MS = 60;
@@ -26,8 +35,7 @@ let activeBlockContainer = null;
 let activeBlockInputId = null;
 let activeTargetSnapshot = null;
 let activeHighlightObserver = null;
-let activeDetachObserver = null;
-let activeMotionCleanup = null;
+let activeScopeObserver = null;
 let statusTimer = null;
 let scrollTimer = null;
 let pluginLoadTimer = null;
@@ -159,6 +167,7 @@ const captureTargetSnapshot = (container) => {
     inputDataUid: readAttr(input, "data-uid"),
     inputDataBlockUid: readAttr(input, "data-block-uid"),
     containerDataUid: readAttr(container, "data-uid"),
+    mainFocusedRoot: isMainFocusedRootException(container),
   };
 };
 
@@ -172,7 +181,8 @@ const snapshotsMatch = (left, right) =>
       left.blockUid === right.blockUid &&
       left.inputDataUid === right.inputDataUid &&
       left.inputDataBlockUid === right.inputDataBlockUid &&
-      left.containerDataUid === right.containerDataUid
+      left.containerDataUid === right.containerDataUid &&
+      left.mainFocusedRoot === right.mainFocusedRoot
   );
 
 const parseWindowIdFromInput = (inputId, uid) => {
@@ -257,75 +267,19 @@ const getOwnCaretAnchor = (container) => {
     : null;
 };
 
-const hasPaintableMotion = (element, property) => {
-  try {
-    return Array.from(element?.getAnimations?.() || []).some((animation) =>
-      (animation.playState === "running" || animation.pending) &&
-      animation.effect?.getKeyframes?.().some((frame) =>
-        property === "opacity"
-          ? Number.parseFloat(frame.opacity) > 0
-          : frame.visibility === "visible"
-      )
-    );
-  } catch (error) {
-    return false;
-  }
-};
-
-const hasPaintableVisibilityMotion = (element, container) => {
-  for (let current = element; current; current = current.parentElement || current.parentNode) {
-    if (hasPaintableMotion(current, "visibility")) return true;
-    if (current === container) break;
-  }
-  return false;
-};
-
-const isVisuallyHidden = (element, container, reserveMotion = false) => {
-  let current = element;
-  while (current) {
-    if (
-      current.hidden ||
-      current.classList?.contains?.("rm-caret-hidden")
-    ) {
-      return true;
-    }
-
-    try {
-      const style = window.getComputedStyle?.(current);
-      if (
-        style?.display === "none" ||
-        // Visibility is inherited but can be overridden by a visible child.
-        // Display:none and opacity:0 still hide the whole descendant subtree.
-        (current === element &&
-          (style?.visibility === "hidden" || style?.visibility === "collapse") &&
-          !(reserveMotion && hasPaintableVisibilityMotion(element, container))) ||
-        (Number.parseFloat(style?.opacity) === 0 &&
-          !(reserveMotion && hasPaintableMotion(current, "opacity")))
-      ) {
-        return true;
-      }
-    } catch (error) {
-      return true;
-    }
-
-    if (current === container) return false;
-    current = current.parentElement || current.parentNode || null;
-  }
-  return false;
-};
-
-const hasVisibleOwnCaret = (container) => {
-  const caret = getOwnCaretAnchor(container);
-  // A fade-in starts at opacity zero. Reserve its slot before it paints rather
-  // than treating the first frame as a permanently missing collapse control.
-  return Boolean(caret && !isVisuallyHidden(caret, container, true));
-};
-
 const getBulletAnchoredTop = (container, button) => {
   const bullet = getOwnBulletAnchor(container);
   if (!bullet) return { top: null, retry: false };
 
-  if (isVisuallyHidden(bullet, container)) {
+  try {
+    const computedStyle = window.getComputedStyle?.(bullet);
+    if (
+      computedStyle?.display === "none" ||
+      computedStyle?.visibility === "hidden"
+    ) {
+      return { top: null, retry: false };
+    }
+  } catch (e) {
     return { top: null, retry: false };
   }
 
@@ -363,18 +317,25 @@ const getCaretAnchoredTop = (container, button) => {
   const caret = getOwnCaretAnchor(container);
   if (!caret || !button) return { top: null, retry: false };
 
-  if (isVisuallyHidden(caret, container, true)) {
+  try {
+    const computedStyle = window.getComputedStyle?.(caret);
+    if (
+      computedStyle?.display === "none" ||
+      computedStyle?.visibility === "hidden"
+    ) {
+      return { top: null, retry: false };
+    }
+  } catch (e) {
     return { top: null, retry: false };
   }
 
   const containerRect = container.getBoundingClientRect?.();
   const caretRect = caret.getBoundingClientRect?.();
   const previousTop = button.style.top;
-  let buttonRect, iconRect;
+  let buttonRect;
   try {
     button.style.top = "";
     buttonRect = button.getBoundingClientRect?.();
-    iconRect = button.querySelector?.(".bp3-icon svg")?.getBoundingClientRect?.();
   } finally {
     button.style.top = previousTop;
   }
@@ -397,15 +358,14 @@ const getCaretAnchoredTop = (container, button) => {
   }
 
   const defaultTop = buttonRect.top - containerRect.top;
-  // Keep the theme's parent baseline unless the visible plus glyph would
-  // overlap the caret. Clearing only the glyph center still leaves its upper
-  // half in the caret's space; the 24px hitbox itself need not sit below it.
-  const iconTop = Number.isFinite(iconRect?.top) && iconRect.height > 0
-    ? iconRect.top
-    : buttonRect.top + (buttonRect.height - DEFAULT_ICON_SIZE) / 2;
+  // Keep the theme's established parent placement when it already clears the
+  // caret. The 24px button box must not start below the caret, or its centered
+  // plus icon drops by another half-box.
+  const minimumButtonCenter =
+    caretRect.top + caretRect.height + CARET_BUTTON_GAP_PX;
   const requiredOffset = Math.max(
     0,
-    caretRect.top + caretRect.height + CARET_ICON_GAP_PX - iconTop
+    minimumButtonCenter - (buttonRect.top + buttonRect.height / 2)
   );
 
   if (requiredOffset === 0) return { top: null, retry: false };
@@ -457,32 +417,55 @@ const getVersionState = (container) => {
   };
 };
 
+const isMainFocusedRootException = (container) => {
+  if (
+    !isNodeConnected(container) ||
+    !determineChildrenState(container) ||
+    isDocumentMode(container) ||
+    getVersionState(container).isVersionBlock
+  ) {
+    return false;
+  }
+  const wrapper = container?.parentElement;
+  if (!wrapper?.classList?.contains?.("rm-zoom-block-wrapper")) return false;
+  if (!container?.closest?.(".roam-body-main")) return false;
+  if (wrapper.closest?.(BLOCK_CONTAINER_SELECTOR)) return false;
+  if (MAIN_ROOT_EXCLUDED_CONTEXTS.some((selector) => container.closest?.(selector))) {
+    return false;
+  }
+  if (!getOwnBullet(container)) return false;
+
+  const caret = getOwnCaretAnchor(container);
+  // Missing is valid only when there is no own native caret at all. A present
+  // caret must carry Roam's native hidden marker; unknown/showing controls stay
+  // on the published parent path.
+  if (
+    caret &&
+    (!caret.classList?.contains?.("rm-caret") ||
+      !caret.classList.contains("rm-caret-hidden") ||
+      caret.classList.contains("rm-caret-showing"))
+  ) {
+    return false;
+  }
+  return true;
+};
+
 const updateButtonState = (container, defer = true) => {
   const button = document.getElementById(BUTTON_CONTAINER_ID);
   if (!button) return;
   const versionState = getVersionState(container);
   const hasChildren = determineChildrenState(container);
   const documentMode = isDocumentMode(container);
-  // Collapsed Version Blocks can be logical parents before Roam renders a
-  // children container or closed Bullet class.
-  const isLogicalParent =
-    hasChildren ||
-    (versionState.isVersionBlock && versionState.isCollapsed);
-  const hasVisibleCaret =
-    !documentMode && isLogicalParent && hasVisibleOwnCaret(container);
+  const shouldUseMainRootException = isMainFocusedRootException(container);
   const shouldOffset =
-    hasVisibleCaret &&
-    versionState.isVersionBlock &&
-    versionState.isCollapsed;
-  // A parent can retain children while Roam hides or omits its fold control.
-  // In that state the plus belongs on its own Bullet row, not below a control
-  // the user cannot see. Document Mode parents retain their CSS text-row
-  // alignment; only childless Document Mode blocks use the Bullet anchor.
-  const treatAsChildren = hasVisibleCaret;
-  const shouldUseCaretAnchor = hasVisibleCaret;
-  const shouldUseBulletAnchor = documentMode
-    ? !hasChildren
-    : !shouldUseCaretAnchor;
+    !documentMode && versionState.isVersionBlock && versionState.isCollapsed;
+  const treatAsChildren =
+    !shouldUseMainRootException &&
+    !documentMode &&
+    (hasChildren ||
+      (versionState.isVersionBlock && versionState.isCollapsed));
+  const shouldUseCaretAnchor =
+    !shouldUseMainRootException && !documentMode && hasChildren;
   button.classList.toggle(DOCUMENT_MODE_CLASS, documentMode);
   button.classList.toggle(NO_CHILDREN_CLASS, !treatAsChildren);
   adjustButtonPosition(
@@ -490,7 +473,7 @@ const updateButtonState = (container, defer = true) => {
     button,
     versionState,
     shouldOffset,
-    shouldUseBulletAnchor,
+    !hasChildren || shouldUseMainRootException,
     shouldUseCaretAnchor,
     defer
   );
@@ -509,16 +492,6 @@ const queueButtonPosition = (applyPosition) => {
     const pendingApply = pendingPositionApply;
     pendingPositionApply = null;
     pendingApply?.();
-  });
-};
-
-const queueActiveButtonState = (container) => {
-  const generation = lifecycleGeneration;
-  queueButtonPosition(() => {
-    if (!isCurrentLifecycle(generation) || activeBlockContainer !== container || !isNodeConnected(container)) return;
-    // Recompute both mode and geometry together; do not replay a stale mode
-    // captured before a CSS transition became visible.
-    updateButtonState(container, false);
   });
 };
 
@@ -649,24 +622,20 @@ const cancelPendingPosition = () => {
 };
 
 const stopHighlightObserver = () => {
-  activeMotionCleanup?.();
-  activeMotionCleanup = null;
   if (activeHighlightObserver) {
     activeHighlightObserver.disconnect();
     activeHighlightObserver = null;
   }
-  if (activeDetachObserver) {
-    activeDetachObserver.disconnect();
-    activeDetachObserver = null;
+  if (activeScopeObserver) {
+    activeScopeObserver.disconnect();
+    activeScopeObserver = null;
   }
 };
 
 const removeButton = () => {
   cancelPendingPosition();
   stopHighlightObserver();
-  // Document lookups no longer see our control after its block is detached.
-  const button = document.getElementById(BUTTON_CONTAINER_ID) ||
-    activeBlockContainer?.querySelector?.(`#${BUTTON_CONTAINER_ID}`);
+  const button = document.getElementById(BUTTON_CONTAINER_ID);
   if (button) {
     if (window.ReactDOM?.unmountComponentAtNode) {
       try {
@@ -684,52 +653,43 @@ const removeButton = () => {
 
 const watchHighlight = (container) => {
   stopHighlightObserver();
-  activeHighlightObserver = new MutationObserver((mutations) => {
-    if (activeBlockContainer !== container) return;
-    if (container.classList.contains(ROAM_HIGHLIGHT_CLASS)) {
+  activeHighlightObserver = new MutationObserver(() => {
+    if (
+      activeBlockContainer === container &&
+      container.classList.contains(ROAM_HIGHLIGHT_CLASS)
+    ) {
       removeButton();
-      return;
     }
-
-    const button = document.getElementById(BUTTON_CONTAINER_ID);
-    const hasExternalLayoutChange = mutations.some((mutation) => {
-      const target = mutation.target;
-      return target !== button && !button?.contains?.(target);
-    });
-    if (hasExternalLayoutChange) queueActiveButtonState(container);
   });
   activeHighlightObserver.observe(container, {
     attributes: true,
-    attributeFilter: ["class", "style", "hidden"],
+    attributeFilter: ["class"],
+  });
+};
+
+const watchFocusedRootScope = (container) => {
+  if (!isMainFocusedRootException(container)) return;
+
+  const invalidateIfScopeChanged = () => {
+    if (
+      activeBlockContainer === container &&
+      !isMainFocusedRootException(container)
+    ) {
+      removeButton();
+    }
+  };
+  activeScopeObserver = new MutationObserver(invalidateIfScopeChanged);
+  // This exists only for the active exceptional root: its own caret/children
+  // can change scope, and its direct wrapper reports reparenting/navigation.
+  activeScopeObserver.observe(container, {
+    attributes: true,
+    attributeFilter: ["class"],
     childList: true,
     subtree: true,
   });
-
-  // A container observer cannot see its own removal because that mutation is
-  // delivered to its former parent. Watch the document while this container is
-  // active so detached DOM and a queued layout frame are cleaned up promptly.
-  const root = document.documentElement || document;
-  activeDetachObserver = new MutationObserver(() => {
-    if (activeBlockContainer === container && !isNodeConnected(container)) {
-      removeButton();
-    }
-  });
-  activeDetachObserver.observe(root, { childList: true, subtree: true });
-
-  // :hover and CSS animation progress do not mutate attributes. Observe their
-  // lifecycle only for our anchors/ancestors, not animated descendant blocks.
-  const motionEvents = ["transitionrun", "transitionstart", "transitionend", "transitioncancel", "animationstart", "animationiteration", "animationend", "animationcancel"];
-  const refreshForMotion = (event) => {
-    if (activeBlockContainer !== container) return;
-    if (event.propertyName && !["opacity", "visibility", "display", "transform"].includes(event.propertyName)) return;
-    const target = event.target;
-    const anchors = [getOwnCaretAnchor(container), getOwnBulletAnchor(container)];
-    if (anchors.some(anchor => anchor && (target === anchor || target?.contains?.(anchor)))) queueActiveButtonState(container);
-  };
-  for (const type of motionEvents) container.addEventListener?.(type, refreshForMotion, true);
-  activeMotionCleanup = () => {
-    for (const type of motionEvents) container.removeEventListener?.(type, refreshForMotion, true);
-  };
+  if (container.parentElement) {
+    activeScopeObserver.observe(container.parentElement, { childList: true });
+  }
 };
 
 const buildBlockInputId = (windowId, uid) =>
@@ -980,7 +940,10 @@ const renderButton = (container) => {
     if (actionHandledForPress) return;
     actionHandledForPress = true;
     if (!pluginActive || renderGeneration !== lifecycleGeneration) return;
-    if (!snapshotsMatch(activeTargetSnapshot, snapshot)) return;
+    if (!snapshotsMatch(activeTargetSnapshot, snapshot)) {
+      removeButton();
+      return;
+    }
 
     const lifecycleToken = renderGeneration;
     const target = resolveValidatedTarget(container, snapshot);
@@ -1186,7 +1149,7 @@ const renderButton = (container) => {
 
   const buttonElement = window.React.createElement(window.Blueprint.Core.Icon, {
     icon: "plus",
-    size: DEFAULT_ICON_SIZE,
+    size: 12,
     onClick: handleInsertClick,
     onContextMenu: handleContextMenu,
     onMouseDown: handleMouseDown,
@@ -1198,8 +1161,9 @@ const renderButton = (container) => {
   buttonContainer.style.visibility = "hidden";
   updateButtonState(container, false);
   buttonContainer.style.visibility = "";
-  watchHighlight(container);
   activeBlockContainer = container;
+  watchHighlight(container);
+  watchFocusedRootScope(container);
 };
 
 const handlePointerMove = (e) => {

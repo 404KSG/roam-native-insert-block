@@ -1,200 +1,153 @@
-/* Owned fixture only. Do not inject into a user graph. */
+/* Owned fixture only. It models native row-local caret hover; no graph is opened. */
 (async () => {
   const mode = new URLSearchParams(location.search).get("mode") || "depot";
-  const errors = [], calls = [], records = new Map(); let nextUid = 0, cancelTrace = null;
-  window.addEventListener("error", event => errors.push(event.error?.message || event.message));
-  window.addEventListener("unhandledrejection", event => errors.push(String(event.reason?.message || event.reason)));
+  const calls = [], records = new Map();
+  let nextUid = 0;
   const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
   window.React = { createElement: (component, props) => ({ component, props }) };
   window.Blueprint = { Core: { Icon() {} } };
   window.ReactDOM = {
     render({ props }, target) {
-      const icon = document.createElement("span"); icon.className = "bp3-icon bp3-icon-plus";
+      const icon = document.createElement("span");
+      icon.className = "bp3-icon bp3-icon-plus";
       icon.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5"/></svg>';
-      for (const [type, callback] of [["click", props.onClick], ["mousedown", props.onMouseDown], ["contextmenu", props.onContextMenu]]) if (callback) icon.addEventListener(type, callback);
+      for (const [type, callback] of [["click", props.onClick], ["mousedown", props.onMouseDown], ["contextmenu", props.onContextMenu]]) {
+        if (callback) icon.addEventListener(type, callback);
+      }
       target.replaceChildren(icon);
     },
-    unmountComponentAtNode(target) { target.replaceChildren(); }
+    unmountComponentAtNode(target) { target.replaceChildren(); },
   };
   window.roamAlphaAPI = {
     data: { pull: (_query, lookup) => copy(records.get(lookup[1])) || null },
     util: { generateUID: () => `fixture-created-${++nextUid}` },
     ui: {
-      getFocusedBlock: () => document.activeElement?.dataset?.blockUid ? { "block-uid": document.activeElement.dataset.blockUid, "window-id": document.activeElement.dataset.windowId } : null,
-      setBlockFocusAndSelection: async value => { calls.push({ type: "focus", value: copy(value) }); }
+      getFocusedBlock: () => document.activeElement?.dataset?.blockUid
+        ? { "block-uid": document.activeElement.dataset.blockUid, "window-id": document.activeElement.dataset.windowId }
+        : null,
+      setBlockFocusAndSelection: async value => calls.push({ type: "focus", value: copy(value) }),
     },
-    createBlock: async value => { calls.push({ type: "create", value: copy(value) }); records.set(value.block.uid, { ":block/uid": value.block.uid, ":block/string": value.block.string, ":block/order": value.location.order, ":block/children": [], ":block/_children": [{ ":block/uid": value.location["parent-uid"] }] }); },
-    deleteBlock: async value => { calls.push({ type: "delete", value: copy(value) }); records.delete(value.block.uid); },
-    moveBlock: async value => { calls.push({ type: "move", value: copy(value) }); },
-    updateBlock: async value => { calls.push({ type: "update", value: copy(value) }); }
+    createBlock: async value => calls.push({ type: "create", value: copy(value) }),
+    deleteBlock: async value => calls.push({ type: "delete", value: copy(value) }),
+    moveBlock: async value => calls.push({ type: "move", value: copy(value) }),
+    updateBlock: async value => calls.push({ type: "update", value: copy(value) }),
   };
-  const rect = element => { const r = element.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
-  const sameRect = (a, b) => Object.keys(a).every(key => Math.abs(a[key] - b[key]) < .1);
-  const centerY = element => { const r = element.getBoundingClientRect(); return r.top + r.height / 2; };
+
   const button = () => document.querySelector("#native-insert-block-btn-container");
   const frames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  const wait = async predicate => { const deadline = performance.now() + 1800; while (!predicate()) { if (performance.now() > deadline) throw new Error("Fixture condition timed out"); await frames(); } };
+  const rect = element => { const r = element.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+  const centerY = element => { const r = element.getBoundingClientRect(); return r.top + r.height / 2; };
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
   function reset() {
-    cancelTrace?.(); cancelTrace = null;
     window.nativeInsertBlockPlugin?.destroy();
-    document.querySelector("#main-fixtures").replaceChildren(); document.querySelector("#sidebar-fixtures").replaceChildren();
-    calls.length = 0; records.clear(); records.set("fixture-page", { ":block/uid": "fixture-page", ":node/title": "Fixture page" });
+    document.querySelector("#main-fixtures").replaceChildren();
+    document.querySelector("#sidebar-fixtures").replaceChildren();
+    calls.length = 0; records.clear(); nextUid = 0;
+    records.set("fixture-page", { ":block/uid": "fixture-page", ":node/title": "Fixture page" });
     window.nativeInsertBlockPlugin?.init();
   }
-  function createCase({ name = "parent", caret = "hidden", sidebar = false, depth = 0, children = true, nestedFirst = false, documentMode = false, version = false, ariaHidden = false, fadeDelay = 0, caretTop = null } = {}) {
+
+  function createCase({ name, scope = "ordinary", caret = "hidden", children = true, documentMode = false, version = false, uid = "fixture-shared-root" } = {}) {
+    const sidebar = scope === "sidebar-root";
     const mount = document.querySelector(sidebar ? "#sidebar-fixtures" : "#main-fixtures");
-    const shell = document.createElement("div"); if (documentMode) shell.className = "rm-block--document";
-    const container = document.createElement("div"); container.className = "roam-block-container"; container.dataset.blockUid = `fixture-${name}`; container.style.marginLeft = `${depth * 28}px`;
-    if (["hover-fade", "ancestor-fade", "hover-animation"].includes(caret)) container.classList.add(caret);
+    const shell = document.createElement("div");
+    if (documentMode) shell.className = "rm-block--document";
+    const context = document.createElement("div");
+    if (scope === "reference") context.className = "rm-inline-reference";
+    const wrapper = document.createElement("div");
+    wrapper.className = ["main-root", "sidebar-root", "reference"].includes(scope)
+      ? "rm-zoom-block-wrapper"
+      : scope === "descendant" ? "rm-block-children rm-block__children rm-level-1" : "rm-block-children rm-block__children rm-level-0";
+    const container = document.createElement("div");
+    container.className = "roam-block-container";
+    container.dataset.blockUid = uid;
     const row = document.createElement("div"); row.className = "rm-block-main";
     const controls = document.createElement("span"); controls.className = "rm-block__controls";
-    let arrow = null, expander = null;
+    let nativeCaret = null;
     if (caret !== "absent") {
-      expander = document.createElement("span"); expander.className = "block-expand";
-      if (caretTop !== null) expander.style.top = `${caretTop}px`;
-      arrow = document.createElement("span"); arrow.className = "rm-caret" + (version ? " rm-caret-closed" : "");
-      if (caret === "hidden") arrow.style.display = "none";
-      if (caret === "transparent") arrow.style.opacity = "0";
-      if (caret === "class-hidden") arrow.classList.add("rm-caret-hidden");
-      if (caret === "ancestor-hidden") expander.style.display = "none";
-      if (caret === "visible-override") { expander.style.visibility = "hidden"; arrow.style.visibility = "visible"; }
-      if (fadeDelay) (caret === "ancestor-fade" ? expander : arrow).style.transitionDelay = `${fadeDelay}ms`;
-      if (ariaHidden) arrow.setAttribute("aria-hidden", "true");
-      expander.append(arrow); controls.append(expander);
+      const expand = document.createElement("span"); expand.className = "block-expand";
+      nativeCaret = document.createElement("span");
+      nativeCaret.className = `rm-caret rm-caret-open ${caret === "showing" ? "rm-caret-showing" : "rm-caret-hidden"}`;
+      expand.append(nativeCaret); controls.append(expand);
     }
-    const bullet = document.createElement("span"); bullet.className = "rm-bullet";
+    const bullet = document.createElement("span"); bullet.className = children ? "rm-bullet rm-bullet--closed" : "rm-bullet";
     const dot = document.createElement("span"); dot.className = "rm-bullet__inner"; bullet.append(dot); controls.append(bullet);
-    const input = document.createElement("textarea"); input.className = "rm-block-input"; input.rows = 1; input.value = "Focused parent block";
-    input.id = `block-input-${sidebar ? "right-sidebar-1" : "main"}-${container.dataset.blockUid}`; input.dataset.blockUid = container.dataset.blockUid; input.dataset.windowId = sidebar ? "right-sidebar-1" : "main";
-    row.append(controls, input);
+    const input = document.createElement("textarea");
+    input.className = "rm-block-input"; input.rows = 1; input.value = `${scope} same-UID parent`;
+    input.id = `block-input-native-window-${uid}`; input.dataset.blockUid = uid; input.dataset.windowId = "native-window";
+    row.append(controls, input); container.append(row);
     if (version) row.append(Object.assign(document.createElement("span"), { className: "rm-version-choice-wrapper" }));
-    let child = null;
-    if (children) {
-      child = document.createElement("div"); child.className = "rm-block-children";
-      const nested = document.createElement("div"); nested.className = "roam-block-container"; nested.dataset.blockUid = `fixture-${name}-child`;
-      nested.innerHTML = '<div class="rm-block-main"><span class="rm-block__controls"><span class="block-expand"><span class="rm-caret"></span></span><span class="rm-bullet"><span class="rm-bullet__inner"></span></span></span><span class="child-note">Nested child with its own caret</span></div>';
-      child.append(nested);
-      if (nestedFirst) container.append(child, row); else container.append(row, child);
-    } else container.append(row);
-    const following = document.createElement("div"); following.className = "after-row"; following.textContent = "Following sibling keeps its position";
-    shell.append(container, following); mount.append(shell);
-    records.set(container.dataset.blockUid, { ":block/uid": container.dataset.blockUid, ":block/string": input.value, ":block/order": 0, ":block/children": child ? [{ ":block/uid": `fixture-${name}-child` }] : [], ":block/_children": [{ ":block/uid": "fixture-page" }] });
-    return { shell, container, row, controls, arrow, expander, bullet, dot, input, child, following };
+    if (children) container.append(Object.assign(document.createElement("div"), { className: "rm-block-children" }));
+    if (nativeCaret && scope !== "main-root") {
+      row.addEventListener("mouseenter", () => nativeCaret.className = "rm-caret rm-caret-open rm-caret-showing");
+      row.addEventListener("mouseleave", () => nativeCaret.className = "rm-caret rm-caret-open rm-caret-hidden");
+    }
+    wrapper.append(container); context.append(wrapper); shell.append(context); mount.append(shell);
+    records.set(uid, { ":block/uid": uid, ":block/string": input.value, ":block/order": 0, ":block/children": children ? [{ ":block/uid": `${uid}-child` }] : [], ":block/_children": [{ ":block/uid": "fixture-page" }] });
+    return { name, scope, shell, context, wrapper, container, row, nativeCaret, bullet, dot, input };
   }
-  function layoutSnapshot(c) { return { container: rect(c.container), input: rect(c.input), bullet: rect(c.dot), sibling: rect(c.following), child: c.child ? rect(c.child) : null, margin: getComputedStyle(c.container).marginLeft }; }
-  function unchanged(c, before) { const after = layoutSnapshot(c); return ["container", "input", "bullet", "sibling"].every(key => sameRect(before[key], after[key])) && before.margin === after.margin && (!before.child || sameRect(before.child, after.child)); }
-  async function hover(c) { c.container.dispatchEvent(new PointerEvent("pointermove", { bubbles: true })); await frames(); }
-  function probe(c) {
-    const b = button(), br = b?.getBoundingClientRect(), dot = c.dot.getBoundingClientRect();
-    return { button: b ? rect(b) : null, bullet: rect(c.dot), centerDelta: b ? centerY(b) - centerY(c.dot) : null, leftGap: br ? dot.left - br.right : null, inline: b?.classList.contains("native-insert-block-no-children"), cssTop: b ? getComputedStyle(b).top : null, childIndent: c.child ? c.child.getBoundingClientRect().left - c.container.getBoundingClientRect().left : null };
+
+  async function hover(scene) {
+    scene.row.dispatchEvent(new MouseEvent("mouseenter"));
+    scene.row.dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+    await frames();
   }
-  function startHoverTrace(c, onComplete) {
-    cancelTrace?.();
-    const trace = { samples: [], starts: [], caretMutations: 0, done: false }; let raf, timer;
-    const effectiveOpacity = () => {
-      if (getComputedStyle(c.arrow).visibility !== "visible") return 0;
-      let opacity = 1;
-      for (let node = c.arrow; node; node = node.parentElement) {
-        const style = getComputedStyle(node); if (style.display === "none") return 0;
-        opacity *= Number(style.opacity);
-        if (node === c.container) break;
-      }
-      return opacity;
+
+  function probe(scene) {
+    const control = button();
+    const caretRect = scene.nativeCaret?.getBoundingClientRect();
+    const nativeHit = caretRect && scene.nativeCaret.contains(document.elementFromPoint(caretRect.left + caretRect.width / 2, caretRect.top + caretRect.height / 2));
+    return {
+      scope: scene.scope,
+      inline: control?.classList.contains("native-insert-block-no-children") || false,
+      control: control ? rect(control) : null,
+      bullet: rect(scene.dot),
+      centerDelta: control ? centerY(control) - centerY(scene.dot) : null,
+      nativeCaretClass: scene.nativeCaret?.className || "absent",
+      nativeCaretHit: Boolean(nativeHit),
     };
-    const observer = new MutationObserver(records => { trace.caretMutations += records.length; });
-    observer.observe(c.expander, { attributes: true, subtree: true });
-    const finish = () => { cancelAnimationFrame(raf); clearTimeout(timer); observer.disconnect(); document.removeEventListener("pointermove", start, true); trace.done = true; cancelTrace = null; onComplete?.(trace); };
-    const sample = () => {
-      const b = button(), icon = b?.querySelector("svg"), ir = icon?.getBoundingClientRect(), cr = c.arrow.getBoundingClientRect(), opacity = effectiveOpacity();
-      trace.samples.push({ elapsed: performance.now() - trace.started, opacity, inline: b?.classList.contains("native-insert-block-no-children"), overlap: !!ir && opacity > .01 && Math.min(ir.right, cr.right) > Math.max(ir.left, cr.left) && Math.min(ir.bottom, cr.bottom) > Math.max(ir.top, cr.top), hitConflict: opacity > .01 && !!b?.contains(document.elementFromPoint(cr.left + cr.width / 2, cr.top + cr.height / 2)) });
-      if (trace.samples.length >= 8 && performance.now() - trace.started > 500) finish(); else raf = requestAnimationFrame(sample);
-    };
-    const start = event => {
-      if (trace.started !== undefined || !c.container.contains(event.target)) return;
-      trace.started = performance.now();
-      trace.starts.push({ trusted: event.isTrusted, opacity: effectiveOpacity(), inline: button()?.classList.contains("native-insert-block-no-children") });
-      raf = requestAnimationFrame(sample);
-    };
-    document.addEventListener("pointermove", start, true);
-    timer = setTimeout(() => { trace.timeout = true; finish(); }, 20000);
-    cancelTrace = () => { trace.canceled = true; finish(); };
-    return trace;
   }
+
   async function run() {
-    const checks = [];
-    async function check(name, body) { const errorOffset = errors.length; reset(); try { await body(); if (errors.length !== errorOffset) throw new Error(errors.slice(errorOffset).join("; ")); checks.push({ name, ok: true }); } catch (error) { checks.push({ name, ok: false, error: error.message }); } }
-    const assert = (condition, message) => { if (!condition) throw new Error(message); };
-    for (const options of [
-      { name: "hidden", caret: "hidden" }, { name: "absent", caret: "absent" },
-      { name: "transparent", caret: "transparent" }, { name: "hidden-class", caret: "class-hidden" },
-      { name: "hidden-ancestor", caret: "ancestor-hidden" },
-      { name: "nested-first", caret: "absent", nestedFirst: true, depth: 2 },
-      { name: "sidebar", caret: "hidden", sidebar: true, depth: 1 },
-      { name: "hidden-version", caret: "hidden", version: true, children: false }
-    ]) await check(`${options.name}: plus is before the own Bullet without changing layout`, async () => {
-      const c = createCase(options), before = layoutSnapshot(c); await hover(c); const b = button(), p = probe(c);
-      assert(p.inline, "Hidden/absent own caret kept parent clearance");
-      assert(Math.abs(p.centerDelta) < .5, `Vertical center mismatch: ${p.centerDelta}`);
-      assert(p.leftGap >= 0, `Control overlaps Bullet horizontally: ${p.leftGap}`);
-      assert(p.button.width === 24 && p.button.height === 24, "Hitbox is not 24 by 24 CSS pixels");
-      assert(getComputedStyle(b).position === "absolute" && getComputedStyle(b).left === "0px", "Control changed native layout flow");
-      assert(unchanged(c, before), "Text, child indentation, native Bullet or sibling layout changed");
-      const r = b.getBoundingClientRect(), d = c.dot.getBoundingClientRect();
-      assert(b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)), "Plus center is not clickable");
-      assert(!b.contains(document.elementFromPoint(d.left + d.width / 2, d.top + d.height / 2)), "Plus intercepts the native Bullet");
-      assert(calls.length === 0, "Positioning wrote to the graph");
-    });
-    for (const options of [{ name: "visible", caret: "visible" }, { name: "visible-aria", caret: "visible", ariaHidden: true }, { name: "visible-version", caret: "visible", children: false, version: true }, { name: "visible-override", caret: "visible-override" }, { name: "low-caret", caret: "visible", caretTop: 24 }]) await check(`${options.name}: visible own caret keeps clearance`, async () => {
-      const c = createCase(options), before = layoutSnapshot(c); await hover(c);
-      assert(!probe(c).inline, "A visually rendered caret was treated as hidden");
-      assert(button().querySelector("svg").getBoundingClientRect().top >= c.arrow.getBoundingClientRect().bottom + 4 - .1, "Visible plus glyph overlaps the caret");
-      assert(unchanged(c, before), "Caret placement moved the native outline");
-    });
-    await check("Document Mode parent retains its CSS text-row placement", async () => {
-      const c = createCase({ name: "document", documentMode: true, caret: "visible" }); await hover(c);
-      assert(button().classList.contains("native-insert-block-document-mode"), "Document Mode class missing");
-      assert(button().style.top === "" && probe(c).cssTop === "1px", "Document Mode parent used outline Bullet geometry");
-    });
-    await check("same-container hide/reveal updates position without moving the pointer", async () => {
-      const c = createCase({ name: "transition", caret: "hidden" }); await hover(c);
-      assert(probe(c).inline, "Initial hidden caret did not align inline");
-      c.arrow.style.display = "block"; await wait(() => button() && !probe(c).inline);
-      c.arrow.style.display = "none"; await wait(() => button() && probe(c).inline && Math.abs(probe(c).centerDelta) < .5);
-    });
-    await check("idle placement produces no self-induced style loop", async () => {
-      const c = createCase({ name: "idle" }); await hover(c); let mutations = 0;
-      const observer = new MutationObserver(records => { mutations += records.length; }); observer.observe(button(), { attributes: true, subtree: true });
-      try { for (let i = 0; i < 6; i++) await frames(); } finally { observer.disconnect(); }
-      assert(mutations === 0, `Unexpected idle style mutations: ${mutations}`);
-    });
-    await check("detached active container loses its owned control before reinsertion", async () => {
-      const c = createCase({ name: "detached" }); await hover(c); c.container.remove(); await frames();
-      assert(!c.container.querySelector("#native-insert-block-btn-container"), "Detached container retained an orphan control");
-      c.shell.prepend(c.container); await hover(c);
-      assert(document.querySelectorAll("#native-insert-block-btn-container").length === 1, "Reinsertion duplicated controls");
-    });
-    await check("unload removes control and styles without altering the outline", async () => {
-      const c = createCase({ name: "unload" }), before = layoutSnapshot(c); await hover(c); window.nativeInsertBlockPlugin.destroy();
-      assert(!button() && !document.querySelector("#native-insert-block-styles"), "Owned UI survived unload");
-      assert(unchanged(c, before), "Unload changed native outline geometry");
-    });
-    const report = { mode, passed: checks.every(c => c.ok), checks, errors: [...errors] };
-    document.querySelector("#results").textContent = JSON.stringify(report, null, 2); window.__nativeLayoutResult = report; return report;
+    reset();
+    const scenes = [
+      createCase({ name: "main root", scope: "main-root" }),
+      createCase({ name: "sidebar twin", scope: "sidebar-root" }),
+      createCase({ name: "focused descendant", scope: "descendant" }),
+      createCase({ name: "ordinary parent", scope: "ordinary" }),
+      createCase({ name: "reference copy", scope: "reference" }),
+    ];
+    const results = [];
+    for (const scene of scenes) {
+      await hover(scene);
+      const result = probe(scene); results.push(result);
+      if (scene.scope === "main-root") {
+        assert(result.inline, "verified main focused root must use its own Bullet row");
+        assert(result.nativeCaretClass.includes("rm-caret-hidden"), "main root native caret must remain hidden after row hover");
+        assert(Math.abs(result.centerDelta) < .5, "main root plus must center on own Bullet");
+      } else {
+        assert(!result.inline, `${scene.scope} must retain published parent clearance`);
+        assert(result.nativeCaretClass.includes("rm-caret-showing"), `${scene.scope} must model native row-local hover`);
+        assert(result.nativeCaretHit, `${scene.scope} native caret hit target must remain reachable`);
+      }
+    }
+    return { mode, passed: true, results, calls: [...calls] };
   }
-  const fixture = window.__nativeLayoutFixture = { ready: false, reset, createCase, hover, probe, run, startHoverTrace, calls, errors };
-  if (mode === "roamjs") await new Promise((resolve, reject) => { const script = document.createElement("script"); script.src = "/roamjs.js"; script.onload = resolve; script.onerror = reject; document.body.append(script); });
-  else { const module = await import("/extension.js"); module.default.onload(); }
-  const show = async caret => { reset(); fixture.current = createCase({ name: "preview", caret }); fixture.current.input.focus(); await hover(fixture.current); document.querySelector("#results").textContent = JSON.stringify(probe(fixture.current), null, 2); };
-  document.querySelector("#run-layout").addEventListener("click", () => run().catch(error => { document.querySelector("#results").textContent = error.stack; }));
-  document.querySelector("#show-hidden").addEventListener("click", () => show("hidden"));
-  document.querySelector("#show-visible").addEventListener("click", () => show("visible"));
-  document.querySelector("#trace-hover").addEventListener("click", () => {
-    reset(); fixture.current = createCase({ name: "hover-demo", caret: "hover-fade" });
-    document.querySelector("#results").textContent = "Move the pointer onto Focused parent block. The fixture samples real CSS animation frames without keyboard input.";
-    fixture.hoverTrace = startHoverTrace(fixture.current, trace => {
-      document.querySelector("#results").textContent = JSON.stringify({ passed: !trace.timeout && !trace.canceled && trace.samples.every(frame => !frame.overlap && !frame.hitConflict), ...trace }, null, 2);
-    });
-  });
-  await show("hidden");
-  fixture.ready = true;
+
+  const fixture = window.__nativeLayoutFixture = { ready: false, reset, createCase, hover, probe, run, calls };
+  if (mode === "roamjs") await new Promise((resolve, reject) => {
+    const script = document.createElement("script"); script.src = "/roamjs.js"; script.onload = resolve; script.onerror = reject; document.body.append(script);
+  }); else {
+    const module = await import("/extension.js"); module.default.onload();
+  }
+  const show = async scope => {
+    reset(); fixture.current = createCase({ name: scope, scope }); await hover(fixture.current);
+    document.querySelector("#results").textContent = JSON.stringify(probe(fixture.current), null, 2);
+  };
+  document.querySelector("#run-layout").addEventListener("click", () => run().then(result => document.querySelector("#results").textContent = JSON.stringify(result, null, 2)).catch(error => document.querySelector("#results").textContent = error.stack));
+  document.querySelector("#show-main-root").addEventListener("click", () => show("main-root"));
+  document.querySelector("#show-sidebar").addEventListener("click", () => show("sidebar-root"));
+  document.querySelector("#show-descendant").addEventListener("click", () => show("descendant"));
+  await show("main-root"); fixture.ready = true;
 })().catch(error => { document.querySelector("#results").textContent = error.stack; window.__nativeLayoutLoadError = error.message; });
