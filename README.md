@@ -4,7 +4,7 @@ Add, nest, wrap, or remove Roam blocks from one small control beside the active 
 
 ## v0.9.4
 
-When Roam hides or omits a parent’s collapse control, the plus now aligns with that block’s own Bullet instead of reserving space for the hidden control. Visible collapse controls retain their existing clearance.
+When Roam hides or omits a parent’s collapse control, the plus now aligns with that block’s own Bullet instead of reserving space for the hidden control. Visible collapse controls retain their existing clearance. Document Mode and collapsed Version Blocks keep their established placement rules.
 
 ![Native Insert Block in Roam Research](https://github.com/user-attachments/assets/3e0c261b-1383-439b-9f41-f5d69b38be8d)
 
@@ -41,7 +41,13 @@ npm run build
 
 Edit `src/action-mode.js` for modifier behavior and `src/index.js` for the Roam runtime. The build generates `extension.js` for the Depot and `roamjs.js` for manual use.
 
-For a dependency-free synthetic browser layout fixture (no graph data), run `node tests/layout-fixture-server.js` and open `http://127.0.0.1:4173`.
+For the dependency-free browser fixture, run `node tests/layout-fixture-server.js`, open `http://127.0.0.1:4173`, and click **Run layout checks**. The default uses the Depot bundle; `?mode=roamjs` uses the manual bundle. It uses an in-memory API and real browser layout rather than patched rectangle measurements.
+
+### Verification boundary
+
+The automated smoke suite, 65 Node tests, syntax checks, and coverage attribution pass. Regression coverage includes hidden/absent own carets, hidden ancestors, CSS visibility overrides, nested ownership, Document Mode, Version Blocks, visibility changes, and detached-control cleanup. The smoke suite also checks the declared 24px absolute control box and leading gutter CSS contract.
+
+The browser fixture is prepared and syntax-checked, but its visual/hit-testing checks were **not executed in this update session** because the earlier browser workspace was no longer available. Actual browser geometry and live Roam acceptance remain pending; no production graph or installed extension was changed.
 
 ## Credits
 

@@ -63,6 +63,10 @@ const makeElement = (tagName) => {
       return { ...this.rect };
     },
     remove() {
+      const siblings = this.parentElement?.children;
+      const index = siblings?.indexOf(this) ?? -1;
+      if (index >= 0) siblings.splice(index, 1);
+      this.parentElement = null;
       if (this === styleElement) styleElement = null;
       if (this === buttonElement) buttonElement = null;
     },
@@ -81,7 +85,8 @@ const documentMock = {
   createElement: makeElement,
   getElementById(id) {
     if (styleElement?.id === id) return styleElement;
-    if (buttonElement?.id === id) return buttonElement;
+    // A real document lookup cannot find a node under a detached container.
+    if (buttonElement?.id === id && buttonElement.parentElement?.isConnected !== false) return buttonElement;
     return null;
   },
   querySelector() {
@@ -103,6 +108,7 @@ const createContainer = ({
   caretClass = [],
   caretAriaHidden = false,
   caretAncestorVisible = true,
+  caretAncestorVisibility = null,
   includeCaret = true,
   versionBlock = false,
   versionCollapsed = false,
@@ -170,7 +176,7 @@ const createContainer = ({
   const controls = {
     computedStyle: {
       display: caretAncestorVisible ? "block" : "none",
-      visibility: caretAncestorVisible ? "visible" : "hidden",
+      visibility: caretAncestorVisibility || (caretAncestorVisible ? "visible" : "hidden"),
       opacity: "1",
     },
     closest(selector) {
@@ -259,6 +265,7 @@ const createContainer = ({
       return this.attributes[name] ?? null;
     },
     querySelector(selector) {
+      if (selector === "#native-insert-block-btn-container") return children.find(child => child.id === "native-insert-block-btn-container") || null;
       if (selector.startsWith("[id^='block-input']")) return input;
       if (selector === ".rm-block-children") {
         return hasChildren ? {} : null;
@@ -291,6 +298,7 @@ const createContainer = ({
     },
     appendChild(element) {
       element.rect = { ...buttonRect };
+      element.parentElement = container;
       children.push(element);
       buttonElement = element;
     },
@@ -420,6 +428,12 @@ assert.ok(
   "the plugin must not encode a one-theme pixel correction"
 );
 
+const baseControlCss = styleElement.innerHTML.match(/#native-insert-block-btn-container \{([^}]+)\}/)[1];
+assert.match(baseControlCss, /position:\s*absolute;/, "the control must not participate in native outline flow");
+assert.match(baseControlCss, /left:\s*0;/, "the control must retain its leading gutter anchor");
+assert.match(baseControlCss, /width:\s*24px;/, "the control must retain its declared 24px hitbox width");
+assert.match(baseControlCss, /height:\s*24px;/, "the control must retain its declared 24px hitbox height");
+
 const pointerMove = listeners.get("document:pointermove");
 const moveOver = (container) =>
   pointerMove({
@@ -537,7 +551,11 @@ const focusedParentWithoutCaret = createContainer({
   bulletRect: createRect(121.625, 11.25),
   buttonRect: createRect(118.5, 24),
 });
+focusedParentWithoutCaret.attributes.style = "margin-left: 28px; padding-left: 0px";
+const originalFocusedBullet = focusedParentWithoutCaret.nativeBullet;
 moveOver(focusedParentWithoutCaret);
+assert.strictEqual(focusedParentWithoutCaret.attributes.style, "margin-left: 28px; padding-left: 0px", "placement must not rewrite native indentation");
+assert.ok(focusedParentWithoutCaret.children.includes(originalFocusedBullet), "placement must not replace the native Bullet");
 assert.strictEqual(
   buttonElement.classList.contains("native-insert-block-no-children"),
   true,
@@ -804,6 +822,16 @@ checkReview(
 checkReview(
   ariaHiddenVisibleCaret.getGeometryReads().bullet === 0,
   "a CSS-visible aria-hidden caret must not use the Bullet anchor"
+);
+
+const visibleCaretOverride = createContainer({
+  hasChildren: true,
+  caretAncestorVisibility: "hidden",
+});
+moveOver(visibleCaretOverride);
+checkReview(
+  !buttonElement.classList.contains("native-insert-block-no-children"),
+  "a caret whose computed visibility is visible can override an ancestor's hidden visibility"
 );
 
 const detachedActiveContainer = createContainer({

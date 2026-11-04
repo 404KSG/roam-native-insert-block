@@ -279,8 +279,10 @@ const isVisuallyHidden = (element, container) => {
       const style = window.getComputedStyle?.(current);
       if (
         style?.display === "none" ||
-        style?.visibility === "hidden" ||
-        style?.visibility === "collapse" ||
+        // Visibility is inherited but can be overridden by a visible child.
+        // Display:none and opacity:0 still hide the whole descendant subtree.
+        (current === element &&
+          (style?.visibility === "hidden" || style?.visibility === "collapse")) ||
         Number.parseFloat(style?.opacity) === 0
       ) {
         return true;
@@ -629,7 +631,9 @@ const stopHighlightObserver = () => {
 const removeButton = () => {
   cancelPendingPosition();
   stopHighlightObserver();
-  const button = document.getElementById(BUTTON_CONTAINER_ID);
+  // Document lookups no longer see our control after its block is detached.
+  const button = document.getElementById(BUTTON_CONTAINER_ID) ||
+    activeBlockContainer?.querySelector?.(`#${BUTTON_CONTAINER_ID}`);
   if (button) {
     if (window.ReactDOM?.unmountComponentAtNode) {
       try {
