@@ -21,7 +21,8 @@ const ROAM_HIGHLIGHT_CLASS = "rm-block-highlight";
 const DOCUMENT_MODE_SELECTOR =
   ".rm-block--document, .rm-block__children--document";
 const DEFAULT_BUTTON_SIZE = 24;
-const CARET_BUTTON_GAP_PX = 4;
+const DEFAULT_ICON_SIZE = 12;
+const CARET_ICON_GAP_PX = 4;
 const STATUS_VISIBLE_MS = 2500;
 
 const MAX_FOCUS_ATTEMPTS = 20;
@@ -35,6 +36,7 @@ let activeBlockInputId = null;
 let activeTargetSnapshot = null;
 let activeHighlightObserver = null;
 let activeDetachObserver = null;
+let activeMotionCleanup = null;
 let statusTimer = null;
 let scrollTimer = null;
 let pluginLoadTimer = null;
@@ -264,7 +266,30 @@ const getOwnCaretAnchor = (container) => {
     : null;
 };
 
-const isVisuallyHidden = (element, container) => {
+const hasPaintableMotion = (element, property) => {
+  try {
+    return Array.from(element?.getAnimations?.() || []).some((animation) =>
+      (animation.playState === "running" || animation.pending) &&
+      animation.effect?.getKeyframes?.().some((frame) =>
+        property === "opacity"
+          ? Number.parseFloat(frame.opacity) > 0
+          : frame.visibility === "visible"
+      )
+    );
+  } catch (error) {
+    return false;
+  }
+};
+
+const hasPaintableVisibilityMotion = (element, container) => {
+  for (let current = element; current; current = current.parentElement || current.parentNode) {
+    if (hasPaintableMotion(current, "visibility")) return true;
+    if (current === container) break;
+  }
+  return false;
+};
+
+const isVisuallyHidden = (element, container, reserveMotion = false) => {
   let current = element;
   while (current) {
     if (
@@ -281,8 +306,10 @@ const isVisuallyHidden = (element, container) => {
         // Visibility is inherited but can be overridden by a visible child.
         // Display:none and opacity:0 still hide the whole descendant subtree.
         (current === element &&
-          (style?.visibility === "hidden" || style?.visibility === "collapse")) ||
-        Number.parseFloat(style?.opacity) === 0
+          (style?.visibility === "hidden" || style?.visibility === "collapse") &&
+          !(reserveMotion && hasPaintableVisibilityMotion(element, container))) ||
+        (Number.parseFloat(style?.opacity) === 0 &&
+          !(reserveMotion && hasPaintableMotion(current, "opacity")))
       ) {
         return true;
       }
@@ -298,7 +325,9 @@ const isVisuallyHidden = (element, container) => {
 
 const hasVisibleOwnCaret = (container) => {
   const caret = getOwnCaretAnchor(container);
-  return Boolean(caret && !isVisuallyHidden(caret, container));
+  // A fade-in starts at opacity zero. Reserve its slot before it paints rather
+  // than treating the first frame as a permanently missing collapse control.
+  return Boolean(caret && !isVisuallyHidden(caret, container, true));
 };
 
 const getBulletAnchoredTop = (container, button) => {
@@ -343,17 +372,18 @@ const getCaretAnchoredTop = (container, button) => {
   const caret = getOwnCaretAnchor(container);
   if (!caret || !button) return { top: null, retry: false };
 
-  if (isVisuallyHidden(caret, container)) {
+  if (isVisuallyHidden(caret, container, true)) {
     return { top: null, retry: false };
   }
 
   const containerRect = container.getBoundingClientRect?.();
   const caretRect = caret.getBoundingClientRect?.();
   const previousTop = button.style.top;
-  let buttonRect;
+  let buttonRect, iconRect;
   try {
     button.style.top = "";
     buttonRect = button.getBoundingClientRect?.();
+    iconRect = button.querySelector?.(".bp3-icon svg")?.getBoundingClientRect?.();
   } finally {
     button.style.top = previousTop;
   }
@@ -376,14 +406,15 @@ const getCaretAnchoredTop = (container, button) => {
   }
 
   const defaultTop = buttonRect.top - containerRect.top;
-  // Keep the theme's established parent placement when it already clears the
-  // caret. The 24px button box must not start below the caret, or its centered
-  // plus icon drops by another half-box.
-  const minimumButtonCenter =
-    caretRect.top + caretRect.height + CARET_BUTTON_GAP_PX;
+  // Keep the theme's parent baseline unless the visible plus glyph would
+  // overlap the caret. Clearing only the glyph center still leaves its upper
+  // half in the caret's space; the 24px hitbox itself need not sit below it.
+  const iconTop = Number.isFinite(iconRect?.top) && iconRect.height > 0
+    ? iconRect.top
+    : buttonRect.top + (buttonRect.height - DEFAULT_ICON_SIZE) / 2;
   const requiredOffset = Math.max(
     0,
-    minimumButtonCenter - (buttonRect.top + buttonRect.height / 2)
+    caretRect.top + caretRect.height + CARET_ICON_GAP_PX - iconTop
   );
 
   if (requiredOffset === 0) return { top: null, retry: false };
@@ -487,6 +518,16 @@ const queueButtonPosition = (applyPosition) => {
     const pendingApply = pendingPositionApply;
     pendingPositionApply = null;
     pendingApply?.();
+  });
+};
+
+const queueActiveButtonState = (container) => {
+  const generation = lifecycleGeneration;
+  queueButtonPosition(() => {
+    if (!isCurrentLifecycle(generation) || activeBlockContainer !== container || !isNodeConnected(container)) return;
+    // Recompute both mode and geometry together; do not replay a stale mode
+    // captured before a CSS transition became visible.
+    updateButtonState(container, false);
   });
 };
 
@@ -617,6 +658,8 @@ const cancelPendingPosition = () => {
 };
 
 const stopHighlightObserver = () => {
+  activeMotionCleanup?.();
+  activeMotionCleanup = null;
   if (activeHighlightObserver) {
     activeHighlightObserver.disconnect();
     activeHighlightObserver = null;
@@ -662,7 +705,7 @@ const watchHighlight = (container) => {
       const target = mutation.target;
       return target !== button && !button?.contains?.(target);
     });
-    if (hasExternalLayoutChange) updateButtonState(container);
+    if (hasExternalLayoutChange) queueActiveButtonState(container);
   });
   activeHighlightObserver.observe(container, {
     attributes: true,
@@ -681,6 +724,21 @@ const watchHighlight = (container) => {
     }
   });
   activeDetachObserver.observe(root, { childList: true, subtree: true });
+
+  // :hover and CSS animation progress do not mutate attributes. Observe their
+  // lifecycle only for our anchors/ancestors, not animated descendant blocks.
+  const motionEvents = ["transitionrun", "transitionstart", "transitionend", "transitioncancel", "animationstart", "animationiteration", "animationend", "animationcancel"];
+  const refreshForMotion = (event) => {
+    if (activeBlockContainer !== container) return;
+    if (event.propertyName && !["opacity", "visibility", "display", "transform"].includes(event.propertyName)) return;
+    const target = event.target;
+    const anchors = [getOwnCaretAnchor(container), getOwnBulletAnchor(container)];
+    if (anchors.some(anchor => anchor && (target === anchor || target?.contains?.(anchor)))) queueActiveButtonState(container);
+  };
+  for (const type of motionEvents) container.addEventListener?.(type, refreshForMotion, true);
+  activeMotionCleanup = () => {
+    for (const type of motionEvents) container.removeEventListener?.(type, refreshForMotion, true);
+  };
 };
 
 const buildBlockInputId = (windowId, uid) =>
@@ -1137,7 +1195,7 @@ const renderButton = (container) => {
 
   const buttonElement = window.React.createElement(window.Blueprint.Core.Icon, {
     icon: "plus",
-    size: 12,
+    size: DEFAULT_ICON_SIZE,
     onClick: handleInsertClick,
     onContextMenu: handleContextMenu,
     onMouseDown: handleMouseDown,

@@ -105,6 +105,7 @@ const createContainer = ({
   bulletVisible = true,
   caretVisible = true,
   caretOpacity = "1",
+  caretAnimations = [],
   caretClass = [],
   caretAriaHidden = false,
   caretAncestorVisible = true,
@@ -167,6 +168,7 @@ const createContainer = ({
     getAttribute(name) {
       return name === "aria-hidden" && caretAriaHidden ? "true" : null;
     },
+    getAnimations() { return caretAnimations; },
     getBoundingClientRect: () => {
       geometryReads.caret += 1;
       return { ...caretRect };
@@ -252,7 +254,12 @@ const createContainer = ({
         : [bullet]
     : [];
   const children = includeBullet ? [bullet] : [];
+  const motionListeners = new Map();
   container = {
+    addEventListener(type, callback) { motionListeners.set(type, callback); },
+    removeEventListener(type, callback) { if (motionListeners.get(type) === callback) motionListeners.delete(type); },
+    emitMotion(type, propertyName = "opacity") { motionListeners.get(type)?.({ target: visualCaret, propertyName }); },
+    motionListenerCount() { return motionListeners.size; },
     children,
     nativeBullet: bullet,
     nativeCaret: visualCaret,
@@ -525,7 +532,7 @@ const parentCaretCases = [
     containerRect: createRect(460.75, 31.25),
     caretRect: createRect(487.125, 7),
     buttonRect: createRect(478.75, 24),
-    expectedTop: "25.375px",
+    expectedTop: "31.375px",
   },
 ];
 
@@ -535,7 +542,7 @@ for (const parentCase of parentCaretCases) {
   assert.strictEqual(
     buttonElement.style.top,
     parentCase.expectedTop,
-    `${parentCase.name} must preserve the CSS baseline unless its icon center needs clearance`
+    `${parentCase.name} must preserve the CSS baseline unless its visible plus glyph needs clearance`
   );
   assert.deepStrictEqual(
     parent.getGeometryReads(),
@@ -722,8 +729,8 @@ delayedCaretRect.height = 8;
 flushAnimationFrames();
 assert.strictEqual(
   buttonElement.style.top,
-  "20px",
-  "a recovered parent caret must minimally clear the caret after the retry"
+  "26px",
+  "the visible plus glyph must clear a recovered parent caret after the retry"
 );
 assert.strictEqual(
   animationFrames.size,
@@ -834,6 +841,38 @@ checkReview(
   "a caret whose computed visibility is visible can override an ancestor's hidden visibility"
 );
 
+const fadingCaretMotion = {
+  playState: "running",
+  effect: { getKeyframes: () => [{ opacity: "0" }, { opacity: "1" }] },
+};
+const fadingCaretParent = createContainer({
+  hasChildren: true,
+  caretOpacity: "0",
+  caretAnimations: [fadingCaretMotion],
+  containerRect: createRect(100, 60),
+  bulletRect: createRect(120, 12),
+  buttonRect: createRect(118, 24),
+});
+moveOver(fadingCaretParent);
+checkReview(
+  !buttonElement.classList.contains("native-insert-block-no-children"),
+  "an own caret starting a fade-in must reserve space before its first visible frame"
+);
+fadingCaretMotion.playState = "finished";
+fadingCaretParent.emitMotion("transitionend");
+flushAnimationFrames();
+checkReview(
+  buttonElement.classList.contains("native-insert-block-no-children"),
+  "an ended motion with computed opacity zero must return to the own Bullet row"
+);
+fadingCaretParent.nativeCaret.computedStyle.opacity = "1";
+fadingCaretParent.emitMotion("transitionstart");
+flushAnimationFrames();
+checkReview(
+  !buttonElement.classList.contains("native-insert-block-no-children"),
+  "a CSS-only visibility transition must refresh without a pointer move or DOM mutation"
+);
+
 const detachedActiveContainer = createContainer({
   hasChildren: true,
   caretRect: createRect(120, 0),
@@ -861,6 +900,8 @@ checkReview(
   animationFrames.size === 0,
   "detaching the active container must cancel pending position frames"
 );
+checkReview(fadingCaretParent.motionListenerCount() === 0, "moving to another block must remove motion listeners");
+checkReview(detachedActiveContainer.motionListenerCount() === 0, "detaching the active block must remove motion listeners");
 
 
 windowMock.__extension.onunload();

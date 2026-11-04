@@ -1,7 +1,7 @@
 /* Owned fixture only. Do not inject into a user graph. */
 (async () => {
   const mode = new URLSearchParams(location.search).get("mode") || "depot";
-  const errors = [], calls = [], records = new Map(); let nextUid = 0;
+  const errors = [], calls = [], records = new Map(); let nextUid = 0, cancelTrace = null;
   window.addEventListener("error", event => errors.push(event.error?.message || event.message));
   window.addEventListener("unhandledrejection", event => errors.push(String(event.reason?.message || event.reason)));
   const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -35,26 +35,30 @@
   const frames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const wait = async predicate => { const deadline = performance.now() + 1800; while (!predicate()) { if (performance.now() > deadline) throw new Error("Fixture condition timed out"); await frames(); } };
   function reset() {
+    cancelTrace?.(); cancelTrace = null;
     window.nativeInsertBlockPlugin?.destroy();
     document.querySelector("#main-fixtures").replaceChildren(); document.querySelector("#sidebar-fixtures").replaceChildren();
     calls.length = 0; records.clear(); records.set("fixture-page", { ":block/uid": "fixture-page", ":node/title": "Fixture page" });
     window.nativeInsertBlockPlugin?.init();
   }
-  function createCase({ name = "parent", caret = "hidden", sidebar = false, depth = 0, children = true, nestedFirst = false, documentMode = false, version = false, ariaHidden = false } = {}) {
+  function createCase({ name = "parent", caret = "hidden", sidebar = false, depth = 0, children = true, nestedFirst = false, documentMode = false, version = false, ariaHidden = false, fadeDelay = 0, caretTop = null } = {}) {
     const mount = document.querySelector(sidebar ? "#sidebar-fixtures" : "#main-fixtures");
     const shell = document.createElement("div"); if (documentMode) shell.className = "rm-block--document";
     const container = document.createElement("div"); container.className = "roam-block-container"; container.dataset.blockUid = `fixture-${name}`; container.style.marginLeft = `${depth * 28}px`;
+    if (["hover-fade", "ancestor-fade", "hover-animation"].includes(caret)) container.classList.add(caret);
     const row = document.createElement("div"); row.className = "rm-block-main";
     const controls = document.createElement("span"); controls.className = "rm-block__controls";
     let arrow = null, expander = null;
     if (caret !== "absent") {
       expander = document.createElement("span"); expander.className = "block-expand";
+      if (caretTop !== null) expander.style.top = `${caretTop}px`;
       arrow = document.createElement("span"); arrow.className = "rm-caret" + (version ? " rm-caret-closed" : "");
       if (caret === "hidden") arrow.style.display = "none";
       if (caret === "transparent") arrow.style.opacity = "0";
       if (caret === "class-hidden") arrow.classList.add("rm-caret-hidden");
       if (caret === "ancestor-hidden") expander.style.display = "none";
       if (caret === "visible-override") { expander.style.visibility = "hidden"; arrow.style.visibility = "visible"; }
+      if (fadeDelay) (caret === "ancestor-fade" ? expander : arrow).style.transitionDelay = `${fadeDelay}ms`;
       if (ariaHidden) arrow.setAttribute("aria-hidden", "true");
       expander.append(arrow); controls.append(expander);
     }
@@ -84,6 +88,38 @@
     const b = button(), br = b?.getBoundingClientRect(), dot = c.dot.getBoundingClientRect();
     return { button: b ? rect(b) : null, bullet: rect(c.dot), centerDelta: b ? centerY(b) - centerY(c.dot) : null, leftGap: br ? dot.left - br.right : null, inline: b?.classList.contains("native-insert-block-no-children"), cssTop: b ? getComputedStyle(b).top : null, childIndent: c.child ? c.child.getBoundingClientRect().left - c.container.getBoundingClientRect().left : null };
   }
+  function startHoverTrace(c, onComplete) {
+    cancelTrace?.();
+    const trace = { samples: [], starts: [], caretMutations: 0, done: false }; let raf, timer;
+    const effectiveOpacity = () => {
+      if (getComputedStyle(c.arrow).visibility !== "visible") return 0;
+      let opacity = 1;
+      for (let node = c.arrow; node; node = node.parentElement) {
+        const style = getComputedStyle(node); if (style.display === "none") return 0;
+        opacity *= Number(style.opacity);
+        if (node === c.container) break;
+      }
+      return opacity;
+    };
+    const observer = new MutationObserver(records => { trace.caretMutations += records.length; });
+    observer.observe(c.expander, { attributes: true, subtree: true });
+    const finish = () => { cancelAnimationFrame(raf); clearTimeout(timer); observer.disconnect(); document.removeEventListener("pointermove", start, true); trace.done = true; cancelTrace = null; onComplete?.(trace); };
+    const sample = () => {
+      const b = button(), icon = b?.querySelector("svg"), ir = icon?.getBoundingClientRect(), cr = c.arrow.getBoundingClientRect(), opacity = effectiveOpacity();
+      trace.samples.push({ elapsed: performance.now() - trace.started, opacity, inline: b?.classList.contains("native-insert-block-no-children"), overlap: !!ir && opacity > .01 && Math.min(ir.right, cr.right) > Math.max(ir.left, cr.left) && Math.min(ir.bottom, cr.bottom) > Math.max(ir.top, cr.top), hitConflict: opacity > .01 && !!b?.contains(document.elementFromPoint(cr.left + cr.width / 2, cr.top + cr.height / 2)) });
+      if (trace.samples.length >= 8 && performance.now() - trace.started > 500) finish(); else raf = requestAnimationFrame(sample);
+    };
+    const start = event => {
+      if (trace.started !== undefined || !c.container.contains(event.target)) return;
+      trace.started = performance.now();
+      trace.starts.push({ trusted: event.isTrusted, opacity: effectiveOpacity(), inline: button()?.classList.contains("native-insert-block-no-children") });
+      raf = requestAnimationFrame(sample);
+    };
+    document.addEventListener("pointermove", start, true);
+    timer = setTimeout(() => { trace.timeout = true; finish(); }, 20000);
+    cancelTrace = () => { trace.canceled = true; finish(); };
+    return trace;
+  }
   async function run() {
     const checks = [];
     async function check(name, body) { const errorOffset = errors.length; reset(); try { await body(); if (errors.length !== errorOffset) throw new Error(errors.slice(errorOffset).join("; ")); checks.push({ name, ok: true }); } catch (error) { checks.push({ name, ok: false, error: error.message }); } }
@@ -108,10 +144,10 @@
       assert(!b.contains(document.elementFromPoint(d.left + d.width / 2, d.top + d.height / 2)), "Plus intercepts the native Bullet");
       assert(calls.length === 0, "Positioning wrote to the graph");
     });
-    for (const options of [{ name: "visible", caret: "visible" }, { name: "visible-aria", caret: "visible", ariaHidden: true }, { name: "visible-version", caret: "visible", children: false, version: true }, { name: "visible-override", caret: "visible-override" }]) await check(`${options.name}: visible own caret keeps clearance`, async () => {
+    for (const options of [{ name: "visible", caret: "visible" }, { name: "visible-aria", caret: "visible", ariaHidden: true }, { name: "visible-version", caret: "visible", children: false, version: true }, { name: "visible-override", caret: "visible-override" }, { name: "low-caret", caret: "visible", caretTop: 24 }]) await check(`${options.name}: visible own caret keeps clearance`, async () => {
       const c = createCase(options), before = layoutSnapshot(c); await hover(c);
       assert(!probe(c).inline, "A visually rendered caret was treated as hidden");
-      assert(centerY(button()) >= c.arrow.getBoundingClientRect().bottom + 4 - .1, "Plus lost caret clearance");
+      assert(button().querySelector("svg").getBoundingClientRect().top >= c.arrow.getBoundingClientRect().bottom + 4 - .1, "Visible plus glyph overlaps the caret");
       assert(unchanged(c, before), "Caret placement moved the native outline");
     });
     await check("Document Mode parent retains its CSS text-row placement", async () => {
@@ -145,13 +181,20 @@
     const report = { mode, passed: checks.every(c => c.ok), checks, errors: [...errors] };
     document.querySelector("#results").textContent = JSON.stringify(report, null, 2); window.__nativeLayoutResult = report; return report;
   }
-  const fixture = window.__nativeLayoutFixture = { ready: false, reset, createCase, hover, probe, run, calls, errors };
+  const fixture = window.__nativeLayoutFixture = { ready: false, reset, createCase, hover, probe, run, startHoverTrace, calls, errors };
   if (mode === "roamjs") await new Promise((resolve, reject) => { const script = document.createElement("script"); script.src = "/roamjs.js"; script.onload = resolve; script.onerror = reject; document.body.append(script); });
   else { const module = await import("/extension.js"); module.default.onload(); }
-  fixture.ready = true;
   const show = async caret => { reset(); fixture.current = createCase({ name: "preview", caret }); fixture.current.input.focus(); await hover(fixture.current); document.querySelector("#results").textContent = JSON.stringify(probe(fixture.current), null, 2); };
   document.querySelector("#run-layout").addEventListener("click", () => run().catch(error => { document.querySelector("#results").textContent = error.stack; }));
   document.querySelector("#show-hidden").addEventListener("click", () => show("hidden"));
   document.querySelector("#show-visible").addEventListener("click", () => show("visible"));
+  document.querySelector("#trace-hover").addEventListener("click", () => {
+    reset(); fixture.current = createCase({ name: "hover-demo", caret: "hover-fade" });
+    document.querySelector("#results").textContent = "Move the pointer onto Focused parent block. The fixture samples real CSS animation frames without keyboard input.";
+    fixture.hoverTrace = startHoverTrace(fixture.current, trace => {
+      document.querySelector("#results").textContent = JSON.stringify({ passed: !trace.timeout && !trace.canceled && trace.samples.every(frame => !frame.overlap && !frame.hitConflict), ...trace }, null, 2);
+    });
+  });
   await show("hidden");
+  fixture.ready = true;
 })().catch(error => { document.querySelector("#results").textContent = error.stack; window.__nativeLayoutLoadError = error.message; });

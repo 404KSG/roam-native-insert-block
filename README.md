@@ -2,9 +2,11 @@
 
 Add, nest, wrap, or remove Roam blocks from one small control beside the active block. The button stays aligned with your current text row, including in Document Mode.
 
-## v0.9.4
+## v0.9.5
 
-When Roam hides or omits a parent’s collapse control, the plus now aligns with that block’s own Bullet instead of reserving space for the hidden control. Visible collapse controls retain their existing clearance. Document Mode and collapsed Version Blocks keep their established placement rules.
+When Roam hides or omits a parent’s collapse control, the plus aligns with that block’s own Bullet. A caret starting a hover fade-in now reserves its space before its first visible frame, and CSS motion events refresh placement without requiring another pointer move or keypress. Truly hidden controls still use the inline Bullet row.
+
+Caret clearance uses the visible plus glyph's edge rather than only its center, preserving the normal baseline while preventing edge overlap with unusually low carets. Document Mode, collapsed Version Blocks, the 24px hitbox, and the existing actions remain unchanged.
 
 ![Native Insert Block in Roam Research](https://github.com/user-attachments/assets/3e0c261b-1383-439b-9f41-f5d69b38be8d)
 
@@ -41,13 +43,17 @@ npm run build
 
 Edit `src/action-mode.js` for modifier behavior and `src/index.js` for the Roam runtime. The build generates `extension.js` for the Depot and `roamjs.js` for manual use.
 
-For the dependency-free browser fixture, run `node tests/layout-fixture-server.js`, open `http://127.0.0.1:4173`, and click **Run layout checks**. The default uses the Depot bundle; `?mode=roamjs` uses the manual bundle. It uses an in-memory API and real browser layout rather than patched rectangle measurements.
+For the dependency-free browser fixture, run `node tests/layout-fixture-server.js`, open `http://127.0.0.1:4173`, and click **Run layout checks**. **Trace hover fade** lets you move the pointer onto the sample block and inspect CSS animation samples for glyph overlap and caret hit interception. The default uses the Depot bundle; `?mode=roamjs` uses the manual bundle. It uses an in-memory API and real browser layout rather than patched rectangle measurements.
 
 ### Verification boundary
 
-The automated smoke suite, 65 Node tests, syntax checks, and coverage attribution pass. Regression coverage includes hidden/absent own carets, hidden ancestors, CSS visibility overrides, nested ownership, Document Mode, Version Blocks, visibility changes, and detached-control cleanup. The smoke suite also checks the declared 24px absolute control box and leading gutter CSS contract.
+The automated smoke suite, 65 Node tests, syntax checks, and coverage attribution pass. Coverage includes hidden/absent carets, CSS motion, nested ownership, Document Mode, Version Blocks, visibility changes, listener cleanup, and validated graph actions.
 
-The browser fixture is prepared and syntax-checked, but its visual/hit-testing checks were **not executed in this update session** because the earlier browser workspace was no longer available. Actual browser geometry and live Roam acceptance remain pending; no production graph or installed extension was changed.
+For v0.9.5, all **18 real-layout browser checks** passed for the Depot bundle, manual bundle, and reduced-motion mode. **15 trusted-pointer motion scenarios** passed across fades, delayed/ancestor fades, CSS animation, fade-out recovery, permanently transparent controls, and reduced motion, with no sampled glyph overlap or caret hit interception. A trusted caret click caused no plugin write; a trusted plus click created exactly one mock block.
+
+Replaying v0.9.4 reproduced overlap with the caret fully visible and no caret DOM mutation; an unrelated later UI mutation corrected it. [Before](assets/hover-overlap-before.png) / [after](assets/hover-overlap-after.png) are screenshots of this synthetic fixture, not the user's graph.
+
+These browser results close the isolated geometry/hit-testing gap recorded for v0.9.4. Live Roam installation, production graph behavior, and broader theme/extension compatibility remain separate acceptance work; no production graph or installed extension was changed.
 
 ## Credits
 
