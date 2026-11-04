@@ -1,0 +1,672 @@
+{
+  "results": [
+    {
+      "version": "published-0.9.3",
+      "scope": "ordinary",
+      "passed": true,
+      "body": {
+        "scope": "ordinary",
+        "inline": false,
+        "control": {
+          "x": 73,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "hovered": {
+        "probe": {
+          "scope": "ordinary",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "opacity": "0.7",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 1,
+        "pluginWrites": [],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "published-0.9.3",
+      "scope": "sidebar-root",
+      "passed": true,
+      "body": {
+        "scope": "sidebar-root",
+        "inline": false,
+        "control": {
+          "x": 949,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 976,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "hovered": {
+        "probe": {
+          "scope": "sidebar-root",
+          "inline": false,
+          "control": {
+            "x": 949,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 976,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "opacity": "0.7",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 1,
+        "pluginWrites": [],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "published-0.9.3",
+      "scope": "descendant",
+      "passed": true,
+      "body": {
+        "scope": "descendant",
+        "inline": false,
+        "control": {
+          "x": 73,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "hovered": {
+        "probe": {
+          "scope": "descendant",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "opacity": "0.7",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 1,
+        "pluginWrites": [],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "published-0.9.3",
+      "scope": "main-root",
+      "passed": true,
+      "body": {
+        "scope": "main-root",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "hovered": {
+        "probe": {
+          "scope": "main-root",
+          "inline": false,
+          "control": {
+            "x": 45,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": true
+        },
+        "opacity": "0",
+        "errors": []
+      },
+      "click": null
+    },
+    {
+      "version": "regressed-0.9.5",
+      "scope": "ordinary",
+      "passed": true,
+      "body": {
+        "scope": "ordinary",
+        "inline": true,
+        "control": {
+          "x": 73,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      },
+      "hovered": {
+        "probe": {
+          "scope": "ordinary",
+          "inline": true,
+          "control": {
+            "x": 73,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "opacity": "0",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 0,
+        "pluginWrites": [
+          {
+            "type": "create",
+            "value": {
+              "location": {
+                "parent-uid": "fixture-page",
+                "order": 1
+              },
+              "block": {
+                "string": "",
+                "uid": "fixture-created-1"
+              }
+            }
+          }
+        ],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "regressed-0.9.5",
+      "scope": "sidebar-root",
+      "passed": true,
+      "body": {
+        "scope": "sidebar-root",
+        "inline": true,
+        "control": {
+          "x": 949,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 976,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      },
+      "hovered": {
+        "probe": {
+          "scope": "sidebar-root",
+          "inline": true,
+          "control": {
+            "x": 949,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 976,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "opacity": "0",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 0,
+        "pluginWrites": [
+          {
+            "type": "create",
+            "value": {
+              "location": {
+                "parent-uid": "fixture-page",
+                "order": 1
+              },
+              "block": {
+                "string": "",
+                "uid": "fixture-created-1"
+              }
+            }
+          }
+        ],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "regressed-0.9.5",
+      "scope": "descendant",
+      "passed": true,
+      "body": {
+        "scope": "descendant",
+        "inline": true,
+        "control": {
+          "x": 73,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      },
+      "hovered": {
+        "probe": {
+          "scope": "descendant",
+          "inline": true,
+          "control": {
+            "x": 73,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "opacity": "0",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 0,
+        "pluginWrites": [
+          {
+            "type": "create",
+            "value": {
+              "location": {
+                "parent-uid": "fixture-page",
+                "order": 1
+              },
+              "block": {
+                "string": "",
+                "uid": "fixture-created-1"
+              }
+            }
+          }
+        ],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "regressed-0.9.5",
+      "scope": "main-root",
+      "passed": true,
+      "body": {
+        "scope": "main-root",
+        "inline": true,
+        "control": {
+          "x": 45,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      },
+      "hovered": {
+        "probe": {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "opacity": "0",
+        "errors": []
+      },
+      "click": null
+    },
+    {
+      "version": "scoped-0.9.6",
+      "scope": "ordinary",
+      "passed": true,
+      "body": {
+        "scope": "ordinary",
+        "inline": false,
+        "control": {
+          "x": 73,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "hovered": {
+        "probe": {
+          "scope": "ordinary",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "opacity": "0.7",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 1,
+        "pluginWrites": [],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "scoped-0.9.6",
+      "scope": "sidebar-root",
+      "passed": true,
+      "body": {
+        "scope": "sidebar-root",
+        "inline": false,
+        "control": {
+          "x": 949,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 976,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "hovered": {
+        "probe": {
+          "scope": "sidebar-root",
+          "inline": false,
+          "control": {
+            "x": 949,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 976,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "opacity": "0.7",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 1,
+        "pluginWrites": [],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "scoped-0.9.6",
+      "scope": "descendant",
+      "passed": true,
+      "body": {
+        "scope": "descendant",
+        "inline": false,
+        "control": {
+          "x": 73,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "hovered": {
+        "probe": {
+          "scope": "descendant",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "opacity": "0.7",
+        "errors": []
+      },
+      "click": {
+        "nativeToggles": 1,
+        "pluginWrites": [],
+        "sourceText": "Shared parent block"
+      }
+    },
+    {
+      "version": "scoped-0.9.6",
+      "scope": "main-root",
+      "passed": true,
+      "body": {
+        "scope": "main-root",
+        "inline": true,
+        "control": {
+          "x": 45,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      },
+      "hovered": {
+        "probe": {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "opacity": "0",
+        "errors": []
+      },
+      "click": null
+    }
+  ],
+  "equality": [
+    {
+      "scope": "ordinary",
+      "equalGeometry": true
+    },
+    {
+      "scope": "sidebar-root",
+      "equalGeometry": true
+    },
+    {
+      "scope": "descendant",
+      "equalGeometry": true
+    }
+  ]
+}

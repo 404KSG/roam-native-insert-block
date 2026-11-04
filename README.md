@@ -49,7 +49,9 @@ For the owned browser-layout fixture, run `node tests/layout-fixture-server.js` 
 
 The 0.9.3 styles, ordinary geometry helpers, modifier/action implementation, and original smoke suite are retained unchanged. The automated build, smoke suite, **78 Node tests**, syntax checks, and coverage pass. New scope tests model actual observer registrations and matching mutation delivery rather than invoking every observer manually.
 
-Read-only inspection of Roam's public documentation graph confirmed the main-root, same-UID sidebar, descendant, and ordinary-page DOM/hover distinctions used by the predicate. No user graph or installed extension was changed. Final candidate browser layout and hit-target checks remain pending; the prepared fixture is not itself a claim of browser acceptance.
+Read-only inspection of Roam's public documentation graph confirmed the main-root, same-UID sidebar, descendant, and ordinary-page DOM/hover distinctions used by the predicate. The owned Chromium fixture passed **33 checks in each of three configurations** (Depot, manual bundle, and reduced-motion preference). Trusted pointer comparisons reproduced the 0.9.5 caret-interception bug and confirmed that ordinary parents, sidebar copies, and focused descendants now match 0.9.3 geometry and preserve native collapse clicks. Same-UID pane switching and actual observer invalidation also passed.
+
+See the [acceptance report, screenshots, and raw results](artifacts/main-root-acceptance/README.md). These are real-browser fixture results, not live-extension acceptance: no user graph or installed extension was changed.
 
 ## Credits
 

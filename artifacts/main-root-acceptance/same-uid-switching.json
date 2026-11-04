@@ -1,0 +1,146 @@
+{
+  "sequence": [
+    {
+      "pane": "main",
+      "probe": {
+        "scope": "main-root",
+        "inline": true,
+        "control": {
+          "x": 45,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      },
+      "correctOwner": true,
+      "editorWindow": "native-view-main-root"
+    },
+    {
+      "pane": "side",
+      "probe": {
+        "scope": "sidebar-root",
+        "inline": false,
+        "control": {
+          "x": 949,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 976,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "correctOwner": true,
+      "editorWindow": "native-view-main-root"
+    },
+    {
+      "pane": "main",
+      "probe": {
+        "scope": "main-root",
+        "inline": true,
+        "control": {
+          "x": 45,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      },
+      "correctOwner": true,
+      "editorWindow": "native-view-main-root"
+    },
+    {
+      "pane": "side",
+      "probe": {
+        "scope": "sidebar-root",
+        "inline": false,
+        "control": {
+          "x": 949,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 976,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      },
+      "correctOwner": true,
+      "editorWindow": "native-view-main-root"
+    },
+    {
+      "pane": "main",
+      "probe": {
+        "scope": "main-root",
+        "inline": true,
+        "control": {
+          "x": 45,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      },
+      "correctOwner": true,
+      "editorWindow": "native-view-main-root"
+    }
+  ],
+  "sidebar": {
+    "toggles": 1,
+    "writes": []
+  },
+  "mainRootAction": {
+    "calls": [
+      {
+        "type": "create",
+        "value": {
+          "location": {
+            "parent-uid": "fixture-page",
+            "order": 1
+          },
+          "block": {
+            "string": "",
+            "uid": "fixture-created-1"
+          }
+        }
+      }
+    ],
+    "errors": []
+  }
+}

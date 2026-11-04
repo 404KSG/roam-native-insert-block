@@ -1,0 +1,202 @@
+[
+  {
+    "name": "leaf",
+    "equal": true,
+    "samples": [
+      {
+        "probe": {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "top": "2px"
+      },
+      {
+        "probe": {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "top": "2px"
+      }
+    ]
+  },
+  {
+    "name": "document-parent",
+    "equal": true,
+    "samples": [
+      {
+        "probe": {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 246,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": -1,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "top": "1px"
+      },
+      {
+        "probe": {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 246,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": -1,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "top": "1px"
+      }
+    ]
+  },
+  {
+    "name": "version-parent",
+    "equal": true,
+    "samples": [
+      {
+        "probe": {
+          "scope": "main-root",
+          "inline": false,
+          "control": {
+            "x": 45,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-closed rm-caret-hidden",
+          "nativeCaretHit": true
+        },
+        "top": "18px"
+      },
+      {
+        "probe": {
+          "scope": "main-root",
+          "inline": false,
+          "control": {
+            "x": 45,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-closed rm-caret-hidden",
+          "nativeCaretHit": true
+        },
+        "top": "18px"
+      }
+    ]
+  },
+  {
+    "name": "collapsed-ordinary",
+    "equal": true,
+    "samples": [
+      {
+        "probe": {
+          "scope": "ordinary",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-closed rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "top": "18px"
+      },
+      {
+        "probe": {
+          "scope": "ordinary",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-closed rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "top": "18px"
+      }
+    ]
+  }
+]

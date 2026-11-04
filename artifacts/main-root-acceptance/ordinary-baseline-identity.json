@@ -1,0 +1,50 @@
+[
+  {
+    "name": "addStyles",
+    "identical": true
+  },
+  {
+    "name": "determineChildrenState",
+    "identical": true
+  },
+  {
+    "name": "isDocumentMode",
+    "identical": true
+  },
+  {
+    "name": "getOwnBullet",
+    "identical": true
+  },
+  {
+    "name": "getOwnBulletAnchor",
+    "identical": true
+  },
+  {
+    "name": "getOwnControls",
+    "identical": true
+  },
+  {
+    "name": "getOwnCaretAnchor",
+    "identical": true
+  },
+  {
+    "name": "getBulletAnchoredTop",
+    "identical": true
+  },
+  {
+    "name": "getCaretAnchoredTop",
+    "identical": true
+  },
+  {
+    "name": "getVersionState",
+    "identical": true
+  },
+  {
+    "name": "applyFallbackButtonPosition",
+    "identical": true
+  },
+  {
+    "name": "adjustButtonPosition",
+    "identical": true
+  }
+]

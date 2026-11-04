@@ -151,6 +151,20 @@
         assert(calls.length === 0, 'Layout caused a graph action'); return p;
       });
     }
+    // Enter through the parent body, not the native row. Entering the row first
+    // reveals the caret and can mask the 0.9.5 hover/hit-target regression.
+    for (const scope of ['ordinary', 'sidebar-root', 'descendant', 'reference', 'embed', 'query', 'mentions', 'desk', 'unknown']) {
+      await check(`${scope}: body-first entry leaves the native caret reachable`, async () => {
+        const scene = createCase({ scope });
+        scene.blank.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+        await frames(); const p = probe(scene);
+        assert(p.nativeCaretClass.includes('rm-caret-hidden'), 'The test entered the native row too soon');
+        assert(!p.inline && p.nativeCaretHit, 'The plus occupied the native caret hover/click target');
+        assert(getComputedStyle(button()).top === '18px', 'Body-first placement drifted from 0.9.3');
+        assert(calls.length === 0, 'Body-first hover caused a graph action');
+        return p;
+      });
+    }
     await check('same-UID main and sidebar twins never share placement', async () => {
       const main = createCase({ scope: 'main-root' }), side = createCase({ scope: 'sidebar-root' });
       assert(main.container.dataset.blockUid === side.container.dataset.blockUid && main.input.id !== side.input.id, 'Twin identities are not realistic');
