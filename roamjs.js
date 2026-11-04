@@ -35,6 +35,7 @@ let activeBlockContainer = null;
 let activeBlockInputId = null;
 let activeTargetSnapshot = null;
 let activeHighlightObserver = null;
+let activeDetachObserver = null;
 let statusTimer = null;
 let scrollTimer = null;
 let pluginLoadTimer = null;
@@ -269,7 +270,6 @@ const isVisuallyHidden = (element, container) => {
   while (current) {
     if (
       current.hidden ||
-      current.getAttribute?.("aria-hidden") === "true" ||
       current.classList?.contains?.("rm-caret-hidden")
     ) {
       return true;
@@ -304,15 +304,7 @@ const getBulletAnchoredTop = (container, button) => {
   const bullet = getOwnBulletAnchor(container);
   if (!bullet) return { top: null, retry: false };
 
-  try {
-    const computedStyle = window.getComputedStyle?.(bullet);
-    if (
-      computedStyle?.display === "none" ||
-      computedStyle?.visibility === "hidden"
-    ) {
-      return { top: null, retry: false };
-    }
-  } catch (e) {
+  if (isVisuallyHidden(bullet, container)) {
     return { top: null, retry: false };
   }
 
@@ -448,17 +440,26 @@ const updateButtonState = (container, defer = true) => {
   const versionState = getVersionState(container);
   const hasChildren = determineChildrenState(container);
   const documentMode = isDocumentMode(container);
+  // Collapsed Version Blocks can be logical parents before Roam renders a
+  // children container or closed Bullet class.
+  const isLogicalParent =
+    hasChildren ||
+    (versionState.isVersionBlock && versionState.isCollapsed);
   const hasVisibleCaret =
-    !documentMode && hasChildren && hasVisibleOwnCaret(container);
+    !documentMode && isLogicalParent && hasVisibleOwnCaret(container);
   const shouldOffset =
     hasVisibleCaret &&
     versionState.isVersionBlock &&
     versionState.isCollapsed;
   // A parent can retain children while Roam hides or omits its fold control.
   // In that state the plus belongs on its own Bullet row, not below a control
-  // the user cannot see.
+  // the user cannot see. Document Mode parents retain their CSS text-row
+  // alignment; only childless Document Mode blocks use the Bullet anchor.
   const treatAsChildren = hasVisibleCaret;
   const shouldUseCaretAnchor = hasVisibleCaret;
+  const shouldUseBulletAnchor = documentMode
+    ? !hasChildren
+    : !shouldUseCaretAnchor;
   button.classList.toggle(DOCUMENT_MODE_CLASS, documentMode);
   button.classList.toggle(NO_CHILDREN_CLASS, !treatAsChildren);
   adjustButtonPosition(
@@ -466,7 +467,7 @@ const updateButtonState = (container, defer = true) => {
     button,
     versionState,
     shouldOffset,
-    !shouldUseCaretAnchor,
+    shouldUseBulletAnchor,
     shouldUseCaretAnchor,
     defer
   );
@@ -619,6 +620,10 @@ const stopHighlightObserver = () => {
     activeHighlightObserver.disconnect();
     activeHighlightObserver = null;
   }
+  if (activeDetachObserver) {
+    activeDetachObserver.disconnect();
+    activeDetachObserver = null;
+  }
 };
 
 const removeButton = () => {
@@ -658,10 +663,21 @@ const watchHighlight = (container) => {
   });
   activeHighlightObserver.observe(container, {
     attributes: true,
-    attributeFilter: ["class", "style", "hidden", "aria-hidden"],
+    attributeFilter: ["class", "style", "hidden"],
     childList: true,
     subtree: true,
   });
+
+  // A container observer cannot see its own removal because that mutation is
+  // delivered to its former parent. Watch the document while this container is
+  // active so detached DOM and a queued layout frame are cleaned up promptly.
+  const root = document.documentElement || document;
+  activeDetachObserver = new MutationObserver(() => {
+    if (activeBlockContainer === container && !isNodeConnected(container)) {
+      removeButton();
+    }
+  });
+  activeDetachObserver.observe(root, { childList: true, subtree: true });
 };
 
 const buildBlockInputId = (windowId, uid) =>

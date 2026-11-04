@@ -53,7 +53,7 @@ HTMLElement.prototype.getBoundingClientRect = function () {
   const result = document.querySelector("#results");
   const rows = [];
   const waitFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  const block = ({ name, top, windowId = "main", caret = "visible", documentMode = false, nestedCaret = false }) => {
+  const block = ({ name, top, windowId = "main", caret = "visible", documentMode = false, nestedCaret = false, versionCollapsed = false, includeChildren = true }) => {
     const wrapper = document.createElement("div");
     wrapper.className = "fixture " + (documentMode ? "rm-block--document" : "");
     wrapper.dataset.name = name;
@@ -68,35 +68,40 @@ HTMLElement.prototype.getBoundingClientRect = function () {
     bullet.className = "rm-bullet";
     bullet.append(Object.assign(document.createElement("span"), { className: "rm-bullet__inner" }));
     container.append(bullet);
+    if (versionCollapsed) {
+      container.append(Object.assign(document.createElement("span"), { className: "rm-version-choice-wrapper" }));
+    }
     if (caret !== "absent") {
       const controls = document.createElement("span");
       controls.className = "rm-block__controls";
       const caretNode = document.createElement("span");
-      caretNode.className = "rm-caret " + (caret === "class-hidden" ? "rm-caret-hidden" : "");
+      caretNode.className = "rm-caret " + (caret === "class-hidden" ? "rm-caret-hidden" : "") + (versionCollapsed ? " rm-caret-closed" : "");
       if (caret === "hidden") caretNode.style.display = "none";
       if (caret === "transparent") caretNode.style.opacity = "0";
       controls.append(caretNode);
       container.append(controls);
       container.__caret = caretNode;
     }
-    const children = document.createElement("div");
-    children.className = "rm-block-children";
-    if (nestedCaret) {
-      const child = document.createElement("div");
-      child.className = "roam-block-container";
-      child.dataset.top = top + 40;
-      const childControls = document.createElement("span");
-      childControls.className = "rm-block__controls";
-      childControls.append(Object.assign(document.createElement("span"), { className: "rm-caret" }));
-      child.append(childControls);
-      children.append(child);
-    } else {
-      const child = document.createElement("div");
-      child.className = "roam-block-container";
-      child.dataset.top = top + 40;
-      children.append(child);
+    if (includeChildren) {
+      const children = document.createElement("div");
+      children.className = "rm-block-children";
+      if (nestedCaret) {
+        const child = document.createElement("div");
+        child.className = "roam-block-container";
+        child.dataset.top = top + 40;
+        const childControls = document.createElement("span");
+        childControls.className = "rm-block__controls";
+        childControls.append(Object.assign(document.createElement("span"), { className: "rm-caret" }));
+        child.append(childControls);
+        children.append(child);
+      } else {
+        const child = document.createElement("div");
+        child.className = "roam-block-container";
+        child.dataset.top = top + 40;
+        children.append(child);
+      }
+      container.append(children);
     }
-    container.append(children);
     wrapper.append(container);
     fixtures.append(wrapper);
     return container;
@@ -124,8 +129,17 @@ HTMLElement.prototype.getBoundingClientRect = function () {
     const documentMode = block({ name: "document", top: 250, documentMode: true });
     hover(documentMode);
     expect(currentButton().classList.contains("native-insert-block-document-mode"), "Document Mode stays inline");
+    expect(currentButton().style.top === "", "Document Mode parent keeps CSS text-row positioning");
 
-    const transition = block({ name: "transition", top: 310, caret: "hidden" });
+    const visibleVersion = block({ name: "visible-version", top: 290, versionCollapsed: true, includeChildren: false });
+    hover(visibleVersion);
+    expect(!currentButton().classList.contains("native-insert-block-no-children"), "visible collapsed Version Block keeps caret clearance");
+
+    const hiddenVersion = block({ name: "hidden-version", top: 320, versionCollapsed: true, includeChildren: false, caret: "hidden" });
+    hover(hiddenVersion);
+    expect(currentButton().classList.contains("native-insert-block-no-children"), "hidden collapsed Version Block uses own Bullet row");
+
+    const transition = block({ name: "transition", top: 350, caret: "hidden" });
     hover(transition);
     expect(currentButton().classList.contains("native-insert-block-no-children"), "transition starts inline while hidden");
     transition.__caret.style.display = "inline-block";
