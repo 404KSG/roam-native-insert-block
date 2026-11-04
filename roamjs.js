@@ -33,6 +33,13 @@ const MAIN_ROOT_EXCLUDED_CONTEXTS = [
   ".rm-query",
   ".rm-query-builder",
   ".rm-reference",
+  ".rm-reference-container",
+  ".rm-reference-item",
+  ".rm-ref-page-view",
+  ".rm-mentions",
+  ".roam-query",
+  ".roam-query-content",
+  ".rm-desk-outline",
 ];
 
 const MAX_FOCUS_ATTEMPTS = 20;
@@ -428,22 +435,20 @@ const getVersionState = (container) => {
 };
 
 const isMainFocusedRootException = (container) => {
-  if (
-    !isNodeConnected(container) ||
-    !determineChildrenState(container) ||
-    isDocumentMode(container) ||
-    getVersionState(container).isVersionBlock
-  ) {
-    return false;
-  }
+  // Ordinary rows exit before any descendant/layout-state queries.
   const wrapper = container?.parentElement;
-  if (!wrapper?.classList?.contains?.("rm-zoom-block-wrapper")) return false;
+  if (!isNodeConnected(container) || !wrapper?.classList?.contains?.("rm-zoom-block-wrapper")) return false;
   if (!container?.closest?.(".roam-body-main")) return false;
   if (wrapper.closest?.(BLOCK_CONTAINER_SELECTOR)) return false;
   if (MAIN_ROOT_EXCLUDED_CONTEXTS.some((selector) => container.closest?.(selector))) {
     return false;
   }
-  if (!getOwnBullet(container)) return false;
+  if (
+    !determineChildrenState(container) ||
+    isDocumentMode(container) ||
+    getVersionState(container).isVersionBlock ||
+    !getOwnBullet(container)
+  ) return false;
 
   const caret = getOwnCaretAnchor(container);
   // Missing is valid only when there is no own native caret at all. A present
@@ -645,7 +650,12 @@ const stopHighlightObserver = () => {
 const removeButton = () => {
   cancelPendingPosition();
   stopHighlightObserver();
-  const button = document.getElementById(BUTTON_CONTAINER_ID);
+  // An exceptional root may already be detached when its scope observer runs.
+  // Limit this extra ownership lookup to that special control.
+  const button = document.getElementById(BUTTON_CONTAINER_ID) ||
+    (activeTargetSnapshot?.mainFocusedRoot
+      ? activeBlockContainer?.querySelector?.(`#${BUTTON_CONTAINER_ID}`)
+      : null);
   if (button) {
     if (window.ReactDOM?.unmountComponentAtNode) {
       try {
@@ -689,16 +699,23 @@ const watchFocusedRootScope = (container) => {
     }
   };
   activeScopeObserver = new MutationObserver(invalidateIfScopeChanged);
-  // This exists only for the active exceptional root: its own caret/children
-  // can change scope, and its direct wrapper reports reparenting/navigation.
+  // Only an active exceptional root is watched. Its own subtree can change
+  // scope, while removal/reparenting is reported on the OLD ancestor edge.
   activeScopeObserver.observe(container, {
     attributes: true,
-    attributeFilter: ["class"],
+    attributeFilter: ["class", "id"],
     childList: true,
     subtree: true,
   });
-  if (container.parentElement) {
-    activeScopeObserver.observe(container.parentElement, { childList: true });
+  const mainBody = container.closest(".roam-body-main");
+  const boundary = mainBody.parentElement;
+  for (let node = container.parentElement; node; node = node.parentElement) {
+    activeScopeObserver.observe(node, {
+      childList: true,
+      attributes: true,
+      attributeFilter: ["class", "id"],
+    });
+    if (node === boundary) break;
   }
 };
 

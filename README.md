@@ -4,7 +4,9 @@ Add, nest, wrap, or remove Roam blocks from one small control beside the active 
 
 ## v0.9.6
 
-In a main-pane zoomed block view, the focused root can place the plus before its own Bullet when Roam keeps that root’s own native caret hidden. This is intentionally limited to the direct `.rm-zoom-block-wrapper` child in `.roam-body-main`; sidebar copies, ordinary parents, focused-view descendants, references/embeds/queries, leaves, Document Mode, and Version Blocks retain the published placement.
+This version withdraws the global visibility/animation placement changes from 0.9.4–0.9.5. Ordinary geometry and caret spacing are restored to the published 0.9.3 baseline.
+
+Only the main-pane zoomed block root can place the plus before its own Bullet when its own native caret is absent or marked hidden. The block must be a direct `.rm-zoom-block-wrapper` child in `.roam-body-main`; sidebar copies (even the same UID), focused-view descendants, ordinary parents, references/embeds/queries, Desk, leaves, Document Mode, and Version Blocks stay on the baseline path. Opacity, animations, editor focus, and a literal window ID are not used to infer this scope.
 
 ![Native Insert Block in Roam Research](https://github.com/user-attachments/assets/3e0c261b-1383-439b-9f41-f5d69b38be8d)
 
@@ -41,7 +43,13 @@ npm run build
 
 Edit `src/action-mode.js` for modifier behavior and `src/index.js` for the Roam runtime. The build generates `extension.js` for the Depot and `roamjs.js` for manual use.
 
-For the owned browser-layout fixture, run `node tests/layout-fixture-server.js` and open the local URL it prints. It uses an in-memory API and side-by-side main-root, sidebar, and descendant scenes; no graph is opened. Move over each row to inspect native row-local caret hover and hit targets.
+For the owned browser-layout fixture, run `node tests/layout-fixture-server.js` and open the local URL it prints. It uses an in-memory API, real DOM ancestry and MutationObservers, and main-root/sidebar/descendant cases with native row-local caret hover. Start from the parent body outside its row, then move to the caret to check that ordinary native controls remain reachable. `?mode=roamjs` exercises the manual bundle.
+
+### Verification boundary
+
+The 0.9.3 styles, ordinary geometry helpers, modifier/action implementation, and original smoke suite are retained unchanged. The automated build, smoke suite, **78 Node tests**, syntax checks, and coverage pass. New scope tests model actual observer registrations and matching mutation delivery rather than invoking every observer manually.
+
+Read-only inspection of Roam's public documentation graph confirmed the main-root, same-UID sidebar, descendant, and ordinary-page DOM/hover distinctions used by the predicate. No user graph or installed extension was changed. Final candidate browser layout and hit-target checks remain pending; the prepared fixture is not itself a claim of browser acceptance.
 
 ## Credits
 

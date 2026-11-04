@@ -108,6 +108,10 @@ const createRuntime = ({
     },
     getBoundingClientRect: () => ({ top: 0, height: 24 }),
     remove() {
+      const siblings = this.parentElement?.children;
+      const index = siblings?.indexOf(this) ?? -1;
+      if (index >= 0) siblings.splice(index, 1);
+      this.parentElement = null;
       this.isConnected = false;
       if (this === styleElement) styleElement = null;
       if (this === buttonContainer) buttonContainer = null;
@@ -135,10 +139,12 @@ const createRuntime = ({
     },
   };
 
+  body.parentElement = documentElement;
+
   const getById = (id) => {
     calls.getElementById.push(id);
     if (styleElement?.id === id) return styleElement;
-    if (buttonContainer?.id === id) return buttonContainer;
+    if (buttonContainer?.id === id) return buttonContainer.parentElement?.isConnected === false ? null : buttonContainer;
     if (statusElement?.id === id) return statusElement;
     if (nodesById.has(id)) return nodesById.get(id);
     return null;
@@ -269,18 +275,45 @@ const createRuntime = ({
   };
 
   const mutationObservers = new Set();
+  const isWithin = (node, ancestor) => {
+    for (let current = node; current; current = current.parentElement) if (current === ancestor) return true;
+    return false;
+  };
+  const matchesSelector = (node, selector) => selector.split(',').some(part => {
+    const token = part.trim();
+    return token.startsWith('.') ? node.classList?.contains(token.slice(1)) : token.startsWith('#') && node.id === token.slice(1);
+  });
+  const closestNode = (node, selector) => {
+    for (let current = node; current; current = current.parentElement) if (matchesSelector(current, selector)) return current;
+    return null;
+  };
+  const contextNode = (classes, parentElement = null, id = '') => ({
+    classList: new ClassList(classes), parentElement, id,
+    closest(selector) { return closestNode(this, selector); },
+  });
+  const recordMatches = (record, registrations) => [...registrations].some(([target, options]) => {
+    if (record.target !== target && !(options.subtree && isWithin(record.target, target))) return false;
+    if (record.type === 'childList') return Boolean(options.childList);
+    return record.type === 'attributes' && options.attributes && (!options.attributeFilter || options.attributeFilter.includes(record.attributeName));
+  });
+  const queueMutation = record => {
+    for (const observer of mutationObservers) if (recordMatches(record, observer.registrations)) observer.pending.push(record);
+  };
   class MutationObserverMock {
-    constructor(callback) {
-      this.callback = callback;
-    }
-    observe(target) {
+    constructor(callback) { this.callback = callback; this.registrations = new Map(); this.pending = []; }
+    observe(target, options = {}) {
       mutationObservers.add(this);
-      this.target = target;
+      this.registrations.set(target, { ...options });
     }
-    disconnect() {
-      mutationObservers.delete(this);
-    }
+    disconnect() { mutationObservers.delete(this); this.registrations.clear(); this.pending.length = 0; }
   }
+  const deliverMutations = () => {
+    for (const observer of [...mutationObservers]) {
+      if (!mutationObservers.has(observer)) continue;
+      const records = observer.pending.splice(0);
+      if (records.length) observer.callback(records);
+    }
+  };
 
   const moduleSource = fs
     .readFileSync("extension.js", "utf8")
@@ -394,37 +427,28 @@ const createRuntime = ({
     if (nativeBlockUid) containerAttributes["data-block-uid"] = nativeBlockUid;
     if (blockContainerUid) containerAttributes["data-uid"] = blockContainerUid;
 
-    let currentScope = containerScope;
-    const mainBody = { classList: new ClassList(["roam-body-main"]) };
-    const wrapper = {
-      classList: new ClassList(
-        currentScope === "main-root" || currentScope === "sidebar-root"
-          ? ["rm-zoom-block-wrapper"]
-          : ["rm-block-children"]
-      ),
-      parentElement: mainBody,
-      closest(selector) {
-        if (selector === ".roam-body-main") {
-          return currentScope === "main-root" ? mainBody : null;
-        }
-        if (selector === ".roam-block-container") {
-          return currentScope === "descendant" ? {} : null;
-        }
-        if (currentScope === "sidebar-root") {
-          return ["#right-sidebar", ".rm-sidebar-window", ".rm-sidebar-outline"].includes(selector)
-            ? {} : null;
-        }
-        if (currentScope === "reference") {
-          return [".rm-inline-reference", ".rm-embed-container", ".rm-query", ".rm-query-builder", ".rm-reference"].includes(selector)
-            ? {} : null;
-        }
-        return null;
-      },
+    const mainBody = contextNode(['roam-body-main'], body);
+    const article = contextNode(['roam-article'], mainBody);
+    const shell = contextNode(isDocumentMode ? ['rm-block--document'] : [], article);
+    const sidebar = contextNode(['rm-sidebar-outline', 'rm-sidebar-window'], body, 'right-sidebar');
+    const exclusions = { reference: 'rm-inline-reference', embed: 'rm-embed-container', query: 'rm-query', 'roam-query': 'roam-query', mentions: 'rm-mentions', desk: 'rm-desk-outline' };
+    const wrapper = contextNode([], shell);
+    const setContext = (nextScope, notify = true) => {
+      const previousClass = [...wrapper.classList.classes].join(' '), previousParent = wrapper.parentElement;
+      wrapper.classList = new ClassList(nextScope === 'ordinary' || nextScope === 'descendant' ? ['rm-block-children'] : ['rm-zoom-block-wrapper']);
+      wrapper.parentElement = nextScope === 'sidebar-root' ? sidebar : nextScope === 'unknown' ? body
+        : exclusions[nextScope] ? contextNode([exclusions[nextScope]], shell)
+        : nextScope === 'descendant' ? contextNode(['roam-block-container'], contextNode(['rm-zoom-block-wrapper'], shell)) : shell;
+      if (notify && previousClass !== [...wrapper.classList.classes].join(' ')) queueMutation({ type: 'attributes', target: wrapper, attributeName: 'class' });
+      if (notify && previousParent !== wrapper.parentElement) queueMutation({ type: 'childList', target: previousParent, removedNodes: [wrapper] });
     };
+    setContext(containerScope, false);
+    let connectedOverride = isConnected;
     container = {
       classList: new ClassList(["roam-block-container"]),
-      parentElement: currentScope === "unknown" ? null : wrapper,
-      isConnected: isConnected,
+      parentElement: wrapper,
+      get isConnected() { return connectedOverride && isWithin(this, body); },
+      set isConnected(value) { connectedOverride = Boolean(value); },
       attributes: containerAttributes,
       children: [],
       getAttribute(name) {
@@ -436,6 +460,7 @@ const createRuntime = ({
         return this.querySelectorAll(selector)[0] || null;
       },
       querySelectorAll(selector) {
+        if (selector === '#native-insert-block-btn-container') return this.children.filter(child => child.id === 'native-insert-block-btn-container');
         if (selector.startsWith("[id^='block-input']")) {
           const inputs = [];
           if (input) inputs.push(input);
@@ -458,13 +483,9 @@ const createRuntime = ({
         }
         return [];
       },
-      closest(selector) {
-        if (selector === ".rm-block--document, .rm-block__children--document") {
-          return isDocumentMode ? {} : null;
-        }
-        return wrapper.closest(selector);
-      },
+      closest(selector) { return closestNode(this, selector); },
       appendChild(element) {
+        element.parentElement = this;
         this.children.push(element);
         buttonContainer = element;
         if (element?.id) nodesById.set(element.id, element);
@@ -476,20 +497,43 @@ const createRuntime = ({
       },
       getBoundingClientRect: () => ({ top: 0, height: 24 }),
       nativeCaret: ownCaret,
-      setScope(nextScope) {
-        currentScope = nextScope;
-        wrapper.classList = new ClassList(
-          currentScope === "main-root" || currentScope === "sidebar-root"
-            ? ["rm-zoom-block-wrapper"]
-            : ["rm-block-children"]
-        );
-        this.parentElement = currentScope === "unknown" ? null : wrapper;
+      scopeNodes: { wrapper, shell, article, mainBody, sidebar },
+      setScope(nextScope) { setContext(nextScope); },
+      removeZoomMarker() {
+        wrapper.classList.toggle('rm-zoom-block-wrapper', false);
+        queueMutation({ type: 'attributes', target: wrapper, attributeName: 'class' });
+      },
+      moveArticleToSidebar() {
+        const oldParent = article.parentElement; article.parentElement = sidebar;
+        queueMutation({ type: 'childList', target: oldParent, removedNodes: [article] });
+      },
+      removeMainMarker() {
+        mainBody.classList.toggle('roam-body-main', false);
+        queueMutation({ type: 'attributes', target: mainBody, attributeName: 'class' });
+      },
+      makeAncestorSidebar() {
+        article.id = 'right-sidebar';
+        queueMutation({ type: 'attributes', target: article, attributeName: 'id' });
+      },
+      detachWrapper() {
+        const oldParent = wrapper.parentElement; wrapper.parentElement = null;
+        queueMutation({ type: 'childList', target: oldParent, removedNodes: [wrapper] });
+      },
+      reinsertWrapperInSidebar() {
+        wrapper.parentElement = sidebar;
+        queueMutation({ type: 'childList', target: sidebar, addedNodes: [wrapper] });
       },
       setConnected(connected) {
         this.isConnected = connected;
+        queueMutation({ type: 'childList', target: this.parentElement, removedNodes: connected ? [] : [this] });
       },
     };
 
+    controls.parentElement = container;
+    bullet.parentElement = controls;
+    if (ownCaret) ownCaret.parentElement = controls;
+    if (input) input.parentElement = container;
+    for (const child of nestedContainers) child.parentElement = contextNode(['rm-block-children'], container);
     return container;
   };
 
@@ -580,9 +624,9 @@ const createRuntime = ({
     flushTimers,
     listeners,
     pendingTimerCount: () => pendingTimers.size,
-    triggerMutations: () => {
-      for (const observer of [...mutationObservers]) observer.callback([]);
-    },
+    triggerMutations: deliverMutations,
+    queueMutation,
+    observerRegistrations: () => [...mutationObservers].map(observer => [...observer.registrations]),
     activeObserverCount: () => mutationObservers.size,
     pointerMove,
     registerInput,

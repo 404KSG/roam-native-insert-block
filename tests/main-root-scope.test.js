@@ -34,7 +34,7 @@ test("only the structural main focused root uses its own Bullet when native care
     "an otherwise verified root may lack its own native caret"
   );
 
-  for (const scope of ["ordinary", "sidebar-root", "descendant", "reference", "unknown"]) {
+  for (const scope of ["ordinary", "sidebar-root", "descendant", "reference", "embed", "query", "roam-query", "mentions", "desk", "unknown"]) {
     assert.equal(
       renderInline({ scope }),
       false,
@@ -132,6 +132,35 @@ test("exceptional controls are removed when their root scope invalidates or deta
   } finally {
     detached.unload();
   }
+});
+
+for (const [name, mutate] of [
+  ["zoom-wrapper marker removal", c => c.removeZoomMarker()],
+  ["whole-wrapper sidebar move", c => c.setScope("sidebar-root")],
+  ["enclosing article sidebar move", c => c.moveArticleToSidebar()],
+  ["main-pane marker removal", c => c.removeMainMarker()],
+  ["scope-bearing ancestor ID change", c => c.makeAncestorSidebar()],
+  ["wrapper detachment", c => c.detachWrapper()],
+  ["detach and sidebar reinsertion before delivery", c => { c.detachWrapper(); c.reinsertWrapperInSidebar(); }],
+]) test(`native observer delivery removes the special control after ${name}`, () => {
+  const harness = createRuntime({ collapsed: true, scope: "main-root", ownCaretClass: hiddenCaret });
+  try {
+    harness.renderForContainer(); assert.equal(harness.buttonExists(), true);
+    mutate(harness.container); harness.triggerMutations();
+    assert.equal(harness.buttonExists(), false, `${name} did not reach the active scope observer`);
+    assert.equal(harness.activeObserverCount(), 0);
+    assert.equal(harness.calls.create.length + harness.calls.move.length + harness.calls.update.length + harness.calls.delete.length, 0);
+  } finally { harness.unload(); }
+});
+
+test("ordinary rows do not get scope observers or react to unobserved ancestor mutations", () => {
+  const harness = createRuntime({ collapsed: true, scope: "ordinary", ownCaretClass: hiddenCaret });
+  try {
+    harness.renderForContainer(); assert.equal(harness.activeObserverCount(), 1);
+    harness.container.makeAncestorSidebar(); harness.triggerMutations();
+    assert.equal(harness.buttonExists(), true, "an ordinary row acquired non-baseline scope observation");
+    assert.equal(harness.buttonClassContains("native-insert-block-no-children"), false);
+  } finally { harness.unload(); }
 });
 
 test("scope invalidation makes an exceptional control stale before actions and unload cleans observers", async () => {

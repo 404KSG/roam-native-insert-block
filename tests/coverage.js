@@ -9,6 +9,7 @@ const result = spawnSync(
     "tests/action-mode.test.js",
     "tests/actions.test.js",
     "tests/runtime.test.js",
+    "tests/main-root-scope.test.js",
   ],
   { cwd: process.cwd(), encoding: "utf8" }
 );
