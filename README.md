@@ -2,6 +2,12 @@
 
 Add, nest, wrap, or remove Roam blocks from one small control beside the active block. The button stays aligned with your current text row, including in Document Mode.
 
+## v0.9.7
+
+The plus now refreshes when the hovered block gains or loses children while the pointer stays still. Indenting the first child with Tab clears the native collapse control; outdenting the last child restores the leaf position. Observation follows replacement native controls, coalesces changes into one animation frame, and ignores the plugin's own layout writes. The v0.9.6 placement rules and click actions are unchanged.
+
+Verification: **97 Node tests**, **44 browser-fixture checks in each of three configurations**, and **five trusted Tab/Shift+Tab cycles with zero pointer moves**, followed by a successful native collapse click. See the [regression report and before/after evidence](artifacts/stationary-hierarchy/README.md). These are isolated-fixture results, not live user-graph acceptance.
+
 ## v0.9.6
 
 This version withdraws the global visibility/animation placement changes from 0.9.4–0.9.5. Ordinary geometry and caret spacing are restored to the published 0.9.3 baseline.
@@ -45,7 +51,7 @@ Edit `src/action-mode.js` for modifier behavior and `src/index.js` for the Roam 
 
 For the owned browser-layout fixture, run `node tests/layout-fixture-server.js` and open the local URL it prints. It uses an in-memory API, real DOM ancestry and MutationObservers, and main-root/sidebar/descendant cases with native row-local caret hover. Start from the parent body outside its row, then move to the caret to check that ordinary native controls remain reachable. `?mode=roamjs` exercises the manual bundle.
 
-### Verification boundary
+### v0.9.6 verification boundary
 
 The 0.9.3 styles, ordinary geometry helpers, modifier/action implementation, and original smoke suite are retained unchanged. The automated build, smoke suite, **78 Node tests**, syntax checks, and coverage pass. New scope tests model actual observer registrations and matching mutation delivery rather than invoking every observer manually.
 

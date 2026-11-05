@@ -671,24 +671,69 @@ const removeButton = () => {
   activeTargetSnapshot = null;
 };
 
-const watchHighlight = (container) => {
+const watchActiveBlock = (container) => {
   stopHighlightObserver();
-  activeHighlightObserver = new MutationObserver(() => {
+  activeHighlightObserver = new MutationObserver((records) => {
+    if (activeBlockContainer !== container) return;
     if (
-      activeBlockContainer === container &&
+      !isNodeConnected(container) ||
       container.classList.contains(ROAM_HIGHLIGHT_CLASS)
     ) {
       removeButton();
+      return;
     }
+
+    // Keyboard indent/outdent can change the native row while the pointer is
+    // stationary. Watch the owning container, not a caret node React may replace.
+    // Ignore our own class/style writes and unrelated descendant-row mutations.
+    const affectsOwnRow = records.some(({ target }) =>
+      target?.id !== BUTTON_CONTAINER_ID &&
+      !target?.closest?.(`#${BUTTON_CONTAINER_ID}`) &&
+      (target === container ||
+        target?.closest?.(BLOCK_CONTAINER_SELECTOR) === container)
+    );
+    if (!affectsOwnRow) return;
+
+    queueButtonPosition(() => {
+      if (activeBlockContainer !== container) return;
+      const button = document.getElementById(BUTTON_CONTAINER_ID);
+      const current = captureTargetSnapshot(container);
+      // Scope entry is a placement change, not a new block identity. Preserve
+      // the mounted control/press guard, but never adopt a recycled input or UID.
+      const sameIdentity = current && snapshotsMatch(activeTargetSnapshot, {
+        ...current,
+        mainFocusedRoot: activeTargetSnapshot?.mainFocusedRoot,
+      });
+      if (
+        !isNodeConnected(container) ||
+        container.classList.contains(ROAM_HIGHLIGHT_CLASS) ||
+        !button || button.parentElement !== container ||
+        !sameIdentity ||
+        (activeTargetSnapshot.mainFocusedRoot && !current.mainFocusedRoot)
+      ) {
+        removeButton();
+        return;
+      }
+      if (!activeTargetSnapshot.mainFocusedRoot && current.mainFocusedRoot) {
+        activeTargetSnapshot.mainFocusedRoot = true;
+        watchFocusedRootScope(container);
+      }
+      // Read the latest hierarchy inside the coalesced frame, not a leaf/parent
+      // decision captured before Roam finishes rendering its children and caret.
+      updateButtonState(container, false);
+    });
   });
   activeHighlightObserver.observe(container, {
+    childList: true,
+    subtree: true,
     attributes: true,
-    attributeFilter: ["class"],
+    attributeFilter: ["class", "style", "id", "data-block-uid", "data-uid"],
   });
 };
 
 const watchFocusedRootScope = (container) => {
   if (!isMainFocusedRootException(container)) return;
+  activeScopeObserver?.disconnect();
 
   const invalidateIfScopeChanged = () => {
     if (
@@ -1189,7 +1234,7 @@ const renderButton = (container) => {
   updateButtonState(container, false);
   buttonContainer.style.visibility = "";
   activeBlockContainer = container;
-  watchHighlight(container);
+  watchActiveBlock(container);
   watchFocusedRootScope(container);
 };
 

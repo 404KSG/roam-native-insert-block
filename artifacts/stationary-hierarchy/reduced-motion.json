@@ -1,0 +1,1217 @@
+{
+  "mode": "depot",
+  "passed": true,
+  "results": [
+    {
+      "name": "main-root: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "main-root",
+        "inline": true,
+        "control": {
+          "x": 45,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": false
+      }
+    },
+    {
+      "name": "sidebar-root: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "sidebar-root",
+        "inline": false,
+        "control": {
+          "x": 949,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 976,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "descendant: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "descendant",
+        "inline": false,
+        "control": {
+          "x": 73,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "ordinary: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "ordinary",
+        "inline": false,
+        "control": {
+          "x": 73,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "reference: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "reference",
+        "inline": false,
+        "control": {
+          "x": 55,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 82,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "embed: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "embed",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "query: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "query",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "mentions: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "mentions",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "desk: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "desk",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "unknown: positive main-root exception only",
+      "ok": true,
+      "detail": {
+        "scope": "unknown",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "ordinary: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "ordinary",
+        "inline": false,
+        "control": {
+          "x": 73,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "sidebar-root: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "sidebar-root",
+        "inline": false,
+        "control": {
+          "x": 949,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 976,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "descendant: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "descendant",
+        "inline": false,
+        "control": {
+          "x": 73,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 100,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "reference: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "reference",
+        "inline": false,
+        "control": {
+          "x": 55,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 82,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "embed: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "embed",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "query: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "query",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "mentions: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "mentions",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "desk: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "desk",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "unknown: body-first entry leaves the native caret reachable",
+      "ok": true,
+      "detail": {
+        "scope": "unknown",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "same-UID main and sidebar twins never share placement",
+      "ok": true,
+      "detail": [
+        {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        {
+          "scope": "sidebar-root",
+          "inline": false,
+          "control": {
+            "x": 949,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 976,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        {
+          "scope": "sidebar-root",
+          "inline": false,
+          "control": {
+            "x": 949,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 976,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        }
+      ]
+    },
+    {
+      "name": "main root with absent own caret",
+      "ok": true,
+      "detail": {
+        "scope": "main-root",
+        "inline": true,
+        "control": {
+          "x": 45,
+          "y": 247,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 0,
+        "nativeCaretClass": "absent",
+        "nativeCaretHit": false
+      }
+    },
+    {
+      "name": "main root with showing own caret",
+      "ok": true,
+      "detail": {
+        "scope": "main-root",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "main root with unknown own caret",
+      "ok": true,
+      "detail": {
+        "scope": "main-root",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "leaf, Document Mode and Version Block retain baseline classes",
+      "ok": true,
+      "detail": [
+        {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        {
+          "scope": "main-root",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 246,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": -1,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        {
+          "scope": "main-root",
+          "inline": false,
+          "control": {
+            "x": 45,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-closed rm-caret-hidden",
+          "nativeCaretHit": true
+        }
+      ]
+    },
+    {
+      "name": "wrapper class removal: actual observer delivery clears the special control",
+      "ok": true
+    },
+    {
+      "name": "whole wrapper moves to sidebar: actual observer delivery clears the special control",
+      "ok": true
+    },
+    {
+      "name": "article moves to sidebar: actual observer delivery clears the special control",
+      "ok": true
+    },
+    {
+      "name": "ancestor becomes an excluded reference: actual observer delivery clears the special control",
+      "ok": true
+    },
+    {
+      "name": "ancestor ID becomes sidebar: actual observer delivery clears the special control",
+      "ok": true
+    },
+    {
+      "name": "whole focused subtree detaches: actual observer delivery clears the special control",
+      "ok": true
+    },
+    {
+      "name": "detach/reinsert before observer delivery: actual observer delivery clears the special control",
+      "ok": true
+    },
+    {
+      "name": "own caret becomes showing: actual observer delivery clears the special control",
+      "ok": true
+    },
+    {
+      "name": "ordinary: stationary leaf to parent to leaf",
+      "ok": true,
+      "detail": {
+        "before": {
+          "scope": "ordinary",
+          "inline": true,
+          "control": {
+            "x": 73,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "parent": {
+          "scope": "ordinary",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "leaf": {
+          "scope": "ordinary",
+          "inline": true,
+          "control": {
+            "x": 73,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "pointerMovesAfterInitialHover": 0
+      }
+    },
+    {
+      "name": "sidebar-root: stationary leaf to parent to leaf",
+      "ok": true,
+      "detail": {
+        "before": {
+          "scope": "sidebar-root",
+          "inline": true,
+          "control": {
+            "x": 949,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 976,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "parent": {
+          "scope": "sidebar-root",
+          "inline": false,
+          "control": {
+            "x": 949,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 976,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "leaf": {
+          "scope": "sidebar-root",
+          "inline": true,
+          "control": {
+            "x": 949,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 976,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "pointerMovesAfterInitialHover": 0
+      }
+    },
+    {
+      "name": "descendant: stationary leaf to parent to leaf",
+      "ok": true,
+      "detail": {
+        "before": {
+          "scope": "descendant",
+          "inline": true,
+          "control": {
+            "x": 73,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "parent": {
+          "scope": "descendant",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "leaf": {
+          "scope": "descendant",
+          "inline": true,
+          "control": {
+            "x": 73,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "pointerMovesAfterInitialHover": 0
+      }
+    },
+    {
+      "name": "reference: stationary leaf to parent to leaf",
+      "ok": true,
+      "detail": {
+        "before": {
+          "scope": "reference",
+          "inline": true,
+          "control": {
+            "x": 55,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 82,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "parent": {
+          "scope": "reference",
+          "inline": false,
+          "control": {
+            "x": 55,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 82,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "leaf": {
+          "scope": "reference",
+          "inline": true,
+          "control": {
+            "x": 55,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 82,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "pointerMovesAfterInitialHover": 0
+      }
+    },
+    {
+      "name": "embed: stationary leaf to parent to leaf",
+      "ok": true,
+      "detail": {
+        "before": {
+          "scope": "embed",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "parent": {
+          "scope": "embed",
+          "inline": false,
+          "control": {
+            "x": 45,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "leaf": {
+          "scope": "embed",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "pointerMovesAfterInitialHover": 0
+      }
+    },
+    {
+      "name": "query: stationary leaf to parent to leaf",
+      "ok": true,
+      "detail": {
+        "before": {
+          "scope": "query",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "parent": {
+          "scope": "query",
+          "inline": false,
+          "control": {
+            "x": 45,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "leaf": {
+          "scope": "query",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "pointerMovesAfterInitialHover": 0
+      }
+    },
+    {
+      "name": "desk: stationary leaf to parent to leaf",
+      "ok": true,
+      "detail": {
+        "before": {
+          "scope": "desk",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "parent": {
+          "scope": "desk",
+          "inline": false,
+          "control": {
+            "x": 45,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "leaf": {
+          "scope": "desk",
+          "inline": true,
+          "control": {
+            "x": 45,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 72,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        },
+        "pointerMovesAfterInitialHover": 0
+      }
+    },
+    {
+      "name": "stationary main-root scope entry arms subsequent scope invalidation",
+      "ok": true
+    },
+    {
+      "name": "stationary main-root showing-caret round trip preserves ordinary clearance",
+      "ok": true,
+      "detail": {
+        "scope": "main-root",
+        "inline": false,
+        "control": {
+          "x": 45,
+          "y": 263,
+          "width": 24,
+          "height": 24
+        },
+        "bullet": {
+          "x": 72,
+          "y": 256,
+          "width": 6,
+          "height": 6
+        },
+        "centerDelta": 16,
+        "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+        "nativeCaretHit": true
+      }
+    },
+    {
+      "name": "stationary keyboard Tab and Shift+Tab update actual DOM hierarchy",
+      "ok": true,
+      "detail": {
+        "parent": {
+          "scope": "ordinary",
+          "inline": false,
+          "control": {
+            "x": 73,
+            "y": 263,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 16,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-showing",
+          "nativeCaretHit": true
+        },
+        "leaf": {
+          "scope": "ordinary",
+          "inline": true,
+          "control": {
+            "x": 73,
+            "y": 247,
+            "width": 24,
+            "height": 24
+          },
+          "bullet": {
+            "x": 100,
+            "y": 256,
+            "width": 6,
+            "height": 6
+          },
+          "centerDelta": 0,
+          "nativeCaretClass": "rm-caret rm-caret-open rm-caret-hidden",
+          "nativeCaretHit": false
+        }
+      }
+    },
+    {
+      "name": "replaced native controls are observed with no pointer movement",
+      "ok": true
+    },
+    {
+      "name": "unload removes the scoped control and style",
+      "ok": true
+    }
+  ],
+  "errors": []
+}

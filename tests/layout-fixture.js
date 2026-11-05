@@ -1,7 +1,7 @@
 /* Owned fixture only. It models native row-local caret hover; no graph is opened. */
 (async () => {
   const mode = new URLSearchParams(location.search).get("mode") || "depot";
-  const calls = [], nativeToggles = [], errors = [], records = new Map();
+  const calls = [], nativeToggles = [], errors = [], records = new Map(), keyboardCleanups = [];
   let nextUid = 0;
   window.addEventListener("error", event => errors.push(event.error?.message || event.message));
   window.addEventListener("unhandledrejection", event => errors.push(String(event.reason?.message || event.reason)));
@@ -42,6 +42,7 @@
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
 
   function reset() {
+    for (const cleanup of keyboardCleanups.splice(0)) cleanup();
     window.nativeInsertBlockPlugin?.destroy();
     document.querySelector("#main-fixtures").replaceChildren();
     document.querySelector("#sidebar-fixtures").replaceChildren();
@@ -66,10 +67,10 @@
     const row = document.createElement("div"); row.className = "rm-block-main";
     const controls = document.createElement("span"); controls.className = "rm-block__controls";
     let nativeCaret = null, expand = null, childHost = null, isCollapsed = collapsed;
-    const canCollapse = children && (scope !== "main-root" || caret === "showing") && caret !== "unknown";
+    const canCollapse = () => children && (scope !== "main-root" || caret === "showing") && caret !== "unknown";
     const paintCaret = showing => {
       if (!nativeCaret || caret === "unknown") return;
-      nativeCaret.className = `rm-caret ${isCollapsed ? "rm-caret-closed" : "rm-caret-open"} ${showing && canCollapse ? "rm-caret-showing" : "rm-caret-hidden"}`;
+      nativeCaret.className = `rm-caret ${isCollapsed ? "rm-caret-closed" : "rm-caret-open"} ${showing && canCollapse() ? "rm-caret-showing" : "rm-caret-hidden"}`;
     };
     if (caret !== "absent") {
       expand = document.createElement("span"); expand.className = "block-expand";
@@ -83,16 +84,26 @@
     input.id = `block-input-${windowId}-${uid}`; input.dataset.blockUid = uid; input.dataset.windowId = windowId;
     row.append(controls, input); container.append(row);
     if (version) row.append(Object.assign(document.createElement("span"), { className: "rm-version-choice-wrapper" }));
-    if (children) {
-      childHost = document.createElement("div"); childHost.className = "rm-block-children rm-block__children rm-level-1"; childHost.hidden = collapsed;
-      const child = document.createElement("div"); child.className = "roam-block-container"; child.dataset.blockUid = `${uid}-child`;
-      child.innerHTML = '<div class="rm-block-main"><span class="rm-block__controls"><span class="rm-bullet"><span class="rm-bullet__inner"></span></span></span><span class="child-label">Child block</span></div>';
-      childHost.append(child); container.append(childHost);
-    }
+    const setChildren = (present, closed = false, showing = true) => {
+      children = present; isCollapsed = present && closed;
+      bullet.classList.toggle('rm-bullet--closed', isCollapsed);
+      if (present && !childHost) {
+        childHost = document.createElement('div'); childHost.className = 'rm-block-children rm-block__children rm-level-1';
+        const child = document.createElement('div'); child.className = 'roam-block-container'; child.dataset.blockUid = `${uid}-child`;
+        child.innerHTML = '<div class="rm-block-main"><span class="rm-block__controls"><span class="rm-bullet"><span class="rm-bullet__inner"></span></span></span><span class="child-label">Child block</span></div>';
+        childHost.append(child); container.append(childHost);
+      } else if (!present && childHost) { childHost.remove(); childHost = null; }
+      if (childHost) childHost.hidden = isCollapsed;
+      const record = records.get(uid);
+      if (record) record[':block/children'] = present ? [{ ':block/uid': `${uid}-child` }] : [];
+      paintCaret(showing);
+    };
+    setChildren(children, collapsed, caret === 'showing');
     const blank = document.createElement("div"); blank.className = "parent-body"; blank.textContent = "Parent body outside its native row"; container.append(blank);
     row.addEventListener("mouseenter", () => paintCaret(true));
     row.addEventListener("mouseleave", () => paintCaret(false));
-    if (expand && canCollapse) expand.addEventListener("click", () => {
+    if (expand) expand.addEventListener("click", () => {
+      if (!canCollapse()) return;
       isCollapsed = !isCollapsed; bullet.classList.toggle("rm-bullet--closed", isCollapsed);
       if (childHost) childHost.hidden = isCollapsed;
       nativeToggles.push({ uid, scope, collapsed: isCollapsed }); paintCaret(true);
@@ -105,7 +116,28 @@
     } else context.append(wrapper);
     article.append(context); shell.append(article); mount.append(shell);
     records.set(uid, { ":block/uid": uid, ":block/string": input.value, ":block/order": 0, ":block/children": children ? [{ ":block/uid": `${uid}-child` }] : [], ":block/_children": [{ ":block/uid": "fixture-page" }] });
-    return { name, scope, shell, article, context, wrapper, container, row, nativeCaret, expand, bullet, dot, input, childHost, blank };
+    return { name, scope, shell, article, context, wrapper, container, row, nativeCaret, expand, bullet, dot, input, get childHost() { return childHost; }, blank, setChildren };
+  }
+
+  function createKeyboardCase(options = {}) {
+    const scene = createCase({ scope: 'ordinary', ...options, children: false });
+    scene.input.value = 'Archives';
+    const sibling = document.createElement('div'); sibling.className = 'roam-block-container'; sibling.dataset.blockUid = 'fixture-tab-child';
+    const editor = document.createElement('textarea'); editor.className = 'rm-block-input'; editor.value = 'Instant Notes'; editor.id = 'block-input-native-tab-fixture-tab-child';
+    sibling.append(editor); scene.wrapper.append(sibling);
+    const onKey = event => {
+      if (event.key !== 'Tab') return;
+      event.preventDefault();
+      if (event.shiftKey) {
+        scene.wrapper.append(sibling); scene.setChildren(false);
+      } else {
+        scene.setChildren(true); scene.childHost.replaceChildren(sibling);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    keyboardCleanups.push(() => document.removeEventListener('keydown', onKey));
+    editor.focus();
+    return { scene, sibling, editor };
   }
 
   async function hover(scene) {
@@ -201,6 +233,62 @@
       assert(!button() && !scene.container.querySelector('#native-insert-block-btn-container'), 'Stale special control survived a real DOM mutation');
       assert(calls.length === 0, 'Invalidation mutated the graph');
     });
+    for (const scope of ['ordinary', 'sidebar-root', 'descendant', 'reference', 'embed', 'query', 'desk']) {
+      await check(`${scope}: stationary leaf to parent to leaf`, async () => {
+        const scene = createCase({ scope, children: false });
+        await hover(scene);
+        const before = probe(scene);
+        assert(before.inline, 'Initial leaf did not use the Bullet row');
+        scene.setChildren(true); await frames();
+        const parent = probe(scene);
+        assert(button() && !parent.inline && parent.nativeCaretHit, 'Indent left the plus over the native collapse target');
+        assert(getComputedStyle(button()).top === '18px', 'Parent did not return to baseline clearance');
+        scene.setChildren(false); await frames();
+        const leaf = probe(scene);
+        assert(button() && leaf.inline && Math.abs(leaf.centerDelta) < .5, 'Last outdent did not restore Bullet alignment');
+        assert(calls.length === 0, 'Hierarchy layout caused a graph action');
+        return { before, parent, leaf, pointerMovesAfterInitialHover: 0 };
+      });
+    }
+    await check('stationary main-root scope entry arms subsequent scope invalidation', async () => {
+      const scene = createCase({ scope: 'main-root', children: false }); await hover(scene);
+      const original = button(); scene.setChildren(true); await frames();
+      assert(button() === original && probe(scene).inline, 'Hidden-caret root entry remounted or lost its control');
+      scene.wrapper.classList.remove('rm-zoom-block-wrapper'); await frames();
+      assert(!button(), 'Newly exceptional root did not acquire scope observation');
+      assert(calls.length === 0, 'Scope entry caused a graph action');
+    });
+    await check('stationary main-root showing-caret round trip preserves ordinary clearance', async () => {
+      const scene = createCase({ scope: 'main-root', children: false, caret: 'showing' }); await hover(scene);
+      scene.setChildren(true); await frames();
+      const parent = probe(scene);
+      assert(button() && !parent.inline && parent.nativeCaretHit, 'Showing main root did not clear the caret');
+      scene.setChildren(false); await frames();
+      assert(button() && probe(scene).inline, 'Showing main root did not restore the leaf position');
+      return parent;
+    });
+    await check('stationary keyboard Tab and Shift+Tab update actual DOM hierarchy', async () => {
+      const { scene, editor } = createKeyboardCase(); await hover(scene);
+      editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+      await frames();
+      const parent = probe(scene);
+      assert(button() && !parent.inline && parent.nativeCaretHit, 'Keyboard indent left a stale leaf control');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+      await frames(); const leaf = probe(scene);
+      assert(button() && leaf.inline, 'Keyboard outdent left a stale parent control');
+      return { parent, leaf };
+    });
+    await check('replaced native controls are observed with no pointer movement', async () => {
+      const scene = createCase({ scope: 'ordinary' }); await hover(scene);
+      const old = scene.row.querySelector('.rm-block__controls');
+      const replacement = old.cloneNode(true); old.replaceWith(replacement);
+      const caret = replacement.querySelector('.rm-caret'); caret.style.top = '28px';
+      await frames();
+      assert(parseFloat(button().style.top) > 18, 'Replacement caret geometry was not read');
+      caret.style.top = '0px'; await frames();
+      assert(getComputedStyle(button()).top === '18px', 'Mutations on replacement controls were lost');
+      assert(calls.length === 0, 'Caret replacement caused a graph action');
+    });
     await check('unload removes the scoped control and style', async () => {
       const scene = createCase({ scope: 'main-root' }); await hover(scene); window.nativeInsertBlockPlugin.destroy();
       assert(!button() && !document.querySelector('#native-insert-block-styles'), 'Owned UI survived unload');
@@ -209,7 +297,7 @@
     const report = { mode, passed: results.every(r => r.ok), results, errors: [...errors] }; window.__nativeLayoutResult = report; return report;
   }
 
-  const fixture = window.__nativeLayoutFixture = { ready: false, reset, createCase, hover, probe, run, calls, nativeToggles, errors };
+  const fixture = window.__nativeLayoutFixture = { ready: false, reset, createCase, createKeyboardCase, hover, probe, run, calls, nativeToggles, errors };
   if (mode === "roamjs") await new Promise((resolve, reject) => {
     const script = document.createElement("script"); script.src = "/roamjs.js"; script.onload = resolve; script.onerror = reject; document.body.append(script);
   }); else {

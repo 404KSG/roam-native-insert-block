@@ -383,13 +383,14 @@ const createRuntime = ({
             return selector === ".roam-block-container" ? container : null;
           },
         };
-    const ownCaret = caretClasses === null ? null : {
+    let ownCaret = caretClasses === null ? null : {
       classList: new ClassList(caretClasses),
       closest(selector) {
         return selector === ".roam-block-container" ? container : null;
       },
     };
     const controls = {
+      classList: new ClassList(['rm-block__controls']),
       closest(selector) {
         return selector === ".roam-block-container" ? container : null;
       },
@@ -400,7 +401,7 @@ const createRuntime = ({
       },
     };
     const bullet = {
-      classList: new ClassList(isCollapsed ? ["rm-bullet--closed"] : []),
+      classList: new ClassList(['rm-bullet', ...(isCollapsed ? ['rm-bullet--closed'] : [])]),
       closest(selector) {
         return selector === ".roam-block-container" ? container : null;
       },
@@ -496,7 +497,32 @@ const createRuntime = ({
         return nestedContainers.some((child) => child.contains(node));
       },
       getBoundingClientRect: () => ({ top: 0, height: 24 }),
-      nativeCaret: ownCaret,
+      get nativeCaret() { return ownCaret; },
+      setNativeChildren(children) {
+        const removedNodes = nestedContainers.splice(0);
+        for (const child of removedNodes) child.parentElement = null;
+        for (const child of children) child.parentElement = contextNode(['rm-block-children'], container);
+        nestedContainers.push(...children);
+        queueMutation({ type: 'childList', target: container, addedNodes: children, removedNodes });
+      },
+      setNativeCaret(classes, replace = false) {
+        const previous = ownCaret;
+        if (replace || !ownCaret) {
+          ownCaret = classes === null ? null : {
+            classList: new ClassList(classes), parentElement: controls,
+            closest(selector) { return closestNode(this, selector); },
+          };
+          if (previous) previous.parentElement = null;
+          queueMutation({ type: 'childList', target: controls, addedNodes: ownCaret ? [ownCaret] : [], removedNodes: previous ? [previous] : [] });
+        } else {
+          ownCaret.classList = new ClassList(classes);
+          queueMutation({ type: 'attributes', target: ownCaret, attributeName: 'class' });
+        }
+      },
+      setCollapsed(value) {
+        bullet.classList.toggle('rm-bullet--closed', value);
+        queueMutation({ type: 'attributes', target: bullet, attributeName: 'class' });
+      },
       scopeNodes: { wrapper, shell, article, mainBody, sidebar },
       setScope(nextScope) { setContext(nextScope); },
       removeZoomMarker() {
@@ -624,6 +650,7 @@ const createRuntime = ({
     flushTimers,
     listeners,
     pendingTimerCount: () => pendingTimers.size,
+    pendingFrameCount: () => animationFrames.size,
     triggerMutations: deliverMutations,
     queueMutation,
     observerRegistrations: () => [...mutationObservers].map(observer => [...observer.registrations]),

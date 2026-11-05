@@ -10,6 +10,7 @@ const result = spawnSync(
     "tests/actions.test.js",
     "tests/runtime.test.js",
     "tests/main-root-scope.test.js",
+    "tests/stationary-hierarchy.test.js",
   ],
   { cwd: process.cwd(), encoding: "utf8" }
 );
